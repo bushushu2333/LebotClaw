@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>LebotClaw 小博 · 学习伙伴</title>
-<link rel="icon" href="/static/avatar.png">
+<link rel="icon" href="static/avatar.png">
 <script>
 // 首屏前应用主题，避免闪烁（默认白天——给小朋友的主模式）
 document.documentElement.setAttribute("data-theme", localStorage.getItem("lc_theme") || "light");
@@ -360,7 +360,7 @@ label.f { display: block; font-size: 12.5px; font-weight: 700; color: var(--text
 <div id="app">
   <aside id="sidebar">
     <div class="brand">
-      <img class="paw" src="/static/avatar.png" alt="小博">
+      <img class="paw" src="static/avatar.png" alt="小博">
       <div><div class="name">LebotClaw</div><div class="sub">小博 · 学习伙伴控制台</div></div>
     </div>
     <nav id="nav">
@@ -421,7 +421,7 @@ label.f { display: block; font-size: 12.5px; font-weight: 700; color: var(--text
 <!-- 首次见面：称呼弹窗 -->
 <div id="onboard" class="hidden">
   <div class="ob-card">
-    <img src="/static/avatar_named.png" alt="小博">
+    <img src="static/avatar_named.png" alt="小博">
     <h2>嗨！我是小博 🐶</h2>
     <p>第一次见面～怎么称呼你呀？</p>
     <input type="text" id="obName" placeholder="你的名字，如：周周" maxlength="12">
@@ -523,7 +523,7 @@ function switchTab(tab) {
 /* ───────── 状态栏 ───────── */
 async function refreshStatus() {
   try {
-    const o = await api("/api/overview");
+    const o = await api("api/overview");
     $("#modelBadge").textContent = o.default_model ? `🧠 ${o.default_model}` : "⚠ 未配模型";
     $("#dotModel").className = "dot " + (o.has_model ? "ok" : "err");
     $("#statModel").textContent = "模型：" + (o.default_model || "未配置");
@@ -577,25 +577,25 @@ function renderSubjectBar() {
 $("#subjectBar").addEventListener("click", async e => {
   const c = e.target.closest(".chip"); if (!c) return;
   try {
-    await api("/api/session/subject", { method: "POST", body: { session_id: sid, subject: c.dataset.sub } });
+    await api("api/session/subject", { method: "POST", body: { session_id: sid, subject: c.dataset.sub } });
     activeSubject = c.dataset.sub; renderSubjectBar();
   } catch (err) { toast("切换失败：" + err.message); }
 });
 async function syncSubject() {
   try {
-    const r = await api("/api/session/info?session_id=" + encodeURIComponent(sid));
+    const r = await api("api/session/info?session_id=" + encodeURIComponent(sid));
     activeSubject = r.active_subject || "general";
   } catch (e) {}
   renderSubjectBar();
 }
 
-const BOT_AVATAR = '<img src="/static/avatar.png" alt="小博">';
+const BOT_AVATAR = '<img src="static/avatar.png" alt="小博">';
 function msgEl(m) {
   const div = document.createElement("div");
   div.className = "msg " + (m.role === "user" ? "user" : "bot");
   const who = m.role === "user" ? (studentName || "你") : "小博";
   const av = m.role === "user"
-    ? '<img src="/static/student.png" alt="" onerror="this.outerHTML=\'🧒\'">' : BOT_AVATAR;
+    ? '<img src="static/student.png" alt="" onerror="this.outerHTML=\'🧒\'">' : BOT_AVATAR;
   div.innerHTML = `<div class="avatar">${av}</div>
     <div class="bubble"><div class="who">${who}</div>
     <div class="body">${m.role === "user" ? esc(m.text).replace(/\n/g, "<br>") : md(m.text)}</div></div>`;
@@ -606,7 +606,7 @@ function renderMsgs() {
   const list = getMsgs();
   if (!list.length) {
     box.innerHTML = `<div id="welcome">
-      <img src="/static/avatar_named.png" alt="小博">
+      <img src="static/avatar_named.png" alt="小博">
       <h2>${studentName ? studentName + "，你好呀！" : "你好呀，"}我是小博 🐶</h2>
       <p>你的 AI 学习伙伴～数学、语文、科学都可以问我，</p>
       <p>我会自动找最合适的学科小伙伴来帮你！</p>
@@ -646,7 +646,7 @@ async function send() {
   bubble.classList.add("streaming", "cursor");
   box.scrollTop = box.scrollHeight;
 
-  const url = "/api/chat/stream?session_id=" + encodeURIComponent(sid) + "&message=" + encodeURIComponent(text);
+  const url = "api/chat/stream?session_id=" + encodeURIComponent(sid) + "&message=" + encodeURIComponent(text);
   const es = new EventSource(url);
   es.onmessage = ev => {
     if (ev.data === "[DONE]") { finish(); return; }
@@ -684,7 +684,7 @@ async function loadMemory() {
   const pg = $("#memoryPage");
   pg.innerHTML = `<h2>🧠 学习记忆</h2><div class="desc">小博在聊天中自动记住的 4 类信息，越聊越懂你。</div>加载中…`;
   try {
-    const d = await api("/api/memory");
+    const d = await api("api/memory");
     pg.innerHTML = `<h2>🧠 学习记忆</h2><div class="desc">小博在聊天中自动记住的 4 类信息，越聊越懂你。</div>` +
       `<div class="grid2">` + MEM_CATS.map(([cat, label]) => {
         const items = d.memory[cat] || [];
@@ -700,7 +700,7 @@ async function loadMemory() {
 async function loadWiki() {
   const pg = $("#wikiPage");
   let pages = [];
-  try { pages = (await api("/api/wiki")).pages; } catch (e) {}
+  try { pages = (await api("api/wiki")).pages; } catch (e) {}
   pg.innerHTML = `<h2>📚 知识库</h2><div class="desc">结构化知识页——回答相关问题时小博会自动检索引用，让回答有据可依。</div>
     <div class="card"><h3>添加知识页</h3>
       <label class="f">标题</label><input type="text" id="wTitle" placeholder="如：光合作用 / 分数加减法">
@@ -723,7 +723,7 @@ async function loadWiki() {
     const title = $("#wTitle").value.trim(), content = $("#wContent").value.trim();
     if (!title || !content) return toast("标题和内容都要填哦");
     try {
-      await api("/api/wiki", { method: "POST", body: {
+      await api("api/wiki", { method: "POST", body: {
         title, content, source: $("#wSource").value.trim(),
         tags: $("#wTags").value.split(/[,，]/).map(s => s.trim()).filter(Boolean),
       }});
@@ -733,7 +733,7 @@ async function loadWiki() {
   $("#wList").addEventListener("click", async e => {
     const b = e.target.closest("[data-del]"); if (!b) return;
     if (!confirm("确定删除这个知识页？")) return;
-    try { await api("/api/wiki/" + b.dataset.del, { method: "DELETE" }); toast("已删除"); loadWiki(); refreshStatus(); }
+    try { await api("api/wiki/" + b.dataset.del, { method: "DELETE" }); toast("已删除"); loadWiki(); refreshStatus(); }
     catch (err) { toast("删除失败：" + err.message); }
   });
 }
@@ -751,7 +751,7 @@ function loadPlan() {
     const goal = $("#pGoal").value.trim(); if (!goal) return toast("先填个学习目标吧～");
     $("#pResult").innerHTML = `<div class="card">生成中…</div>`;
     try {
-      const d = await api("/api/plan", { method: "POST", body: { goal } });
+      const d = await api("api/plan", { method: "POST", body: { goal } });
       $("#pResult").innerHTML = `<div class="card"><h3>「${esc(goal)}」拆成 ${d.steps.length} 步</h3>` +
         d.steps.map(s => `<div class="step"><div class="num">${s.id + 1}</div>
           <div><div class="tt">${esc(s.title)}</div>
@@ -765,7 +765,7 @@ const TASK_TYPES = [["daily_review","每日复习"],["weekly_summary","每周总
 async function loadJobs() {
   const pg = $("#jobsPage");
   let jobs = null, err = null;
-  try { jobs = (await api("/api/jobs")).jobs; } catch (e) { err = e; }
+  try { jobs = (await api("api/jobs")).jobs; } catch (e) { err = e; }
   let body = `<h2>⏰ 定时任务</h2><div class="desc">到点自动跑小博生成复习清单/总结，推送到飞书等通道。</div>`;
   if (err) {
     body += `<div class="card"><h3>调度器未启用</h3>
@@ -792,7 +792,7 @@ async function loadJobs() {
   if (err) return;
   $("#jAdd").onclick = async () => {
     try {
-      await api("/api/jobs", { method: "POST", body: {
+      await api("api/jobs", { method: "POST", body: {
         task_type: $("#jType").value, cron: $("#jCron").value.trim(),
         prompt: $("#jPrompt").value.trim(), one_shot: $("#jOnce").checked,
       }});
@@ -802,8 +802,8 @@ async function loadJobs() {
   pg.addEventListener("click", async e => {
     const del = e.target.closest("[data-del]"), run = e.target.closest("[data-run]");
     try {
-      if (del) { await api("/api/jobs/" + del.dataset.del, { method: "DELETE" }); toast("已删除"); loadJobs(); }
-      if (run) { const r = await api("/api/jobs/" + run.dataset.run + "/run", { method: "POST" }); toast("已触发：" + (r.run?.status || "ok")); }
+      if (del) { await api("api/jobs/" + del.dataset.del, { method: "DELETE" }); toast("已删除"); loadJobs(); }
+      if (run) { const r = await api("api/jobs/" + run.dataset.run + "/run", { method: "POST" }); toast("已触发：" + (r.run?.status || "ok")); }
     } catch (err) { toast("操作失败：" + err.message); }
   });
 }
@@ -812,7 +812,7 @@ async function loadJobs() {
 async function loadSettings() {
   const pg = $("#settingsPage");
   try {
-    const p = await api("/api/profile");
+    const p = await api("api/profile");
     pg.innerHTML = `<h2>⚙️ 设置</h2><div class="desc">学生信息会被小博记住，用于因材施教。</div>
       <div class="grid2">
       <div class="card"><h3>学生信息</h3>
@@ -833,7 +833,7 @@ async function loadSettings() {
     $("#sSave").onclick = async () => {
       try {
         const nm = $("#sName").value.trim();
-        await api("/api/profile", { method: "POST", body: { name: nm, grade: $("#sGrade").value.trim() } });
+        await api("api/profile", { method: "POST", body: { name: nm, grade: $("#sGrade").value.trim() } });
         if (nm) { studentName = nm; localStorage.setItem("lc_name", nm); }
         toast("已保存 ✓"); refreshStatus();
       } catch (e) { toast("保存失败：" + e.message); }
@@ -844,7 +844,7 @@ async function loadSettings() {
 /* ───────── 首次见面弹窗 ───────── */
 async function checkOnboard() {
   try {
-    const p = await api("/api/profile");
+    const p = await api("api/profile");
     if (p.name) { studentName = p.name; localStorage.setItem("lc_name", p.name); }
   } catch (e) {}
   if (!studentName) {
@@ -858,7 +858,7 @@ async function submitOnboard() {
   if (!name) { toast("告诉小博你的名字嘛～"); $("#obName").focus(); return; }
   const grade = $("#obGrade").value;
   try {
-    await api("/api/profile", { method: "POST", body: { name, grade } });
+    await api("api/profile", { method: "POST", body: { name, grade } });
   } catch (e) { toast("保存失败：" + e.message); }
   studentName = name; localStorage.setItem("lc_name", name);
   $("#onboard").classList.add("hidden");
