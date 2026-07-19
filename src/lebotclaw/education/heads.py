@@ -3,7 +3,7 @@ class HEADSTemplate:
     @staticmethod
     def system_base(subject="通用", grade=""):
         grade_text = grade if grade else "还没告诉我年级"
-        return f"""你是 LebotClaw，一位温暖又耐心的学习伙伴。
+        return f"""你是小博，LebotClaw 平台上一位温暖又耐心的学习伙伴。
 你正在帮助一位 {grade_text} 的同学学习 {subject}。
 
 你是怎样的伙伴：

@@ -38,3 +38,6 @@ htmlcov/
 # Build artifacts
 *.tar.gz
 *.whl
+
+# NiceGUI storage
+.nicegui/

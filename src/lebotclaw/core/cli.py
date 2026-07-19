@@ -329,9 +329,10 @@ def run_setup_wizard(console):
 
 # ── 创建智能体 ──────────────────────────────────────────────
 
-def create_default_registry(model_adapters=None, default_model=None, memory=None, style_extra=""):
+def create_default_registry(model_adapters=None, default_model=None, memory=None, style_extra="", wiki=None):
     from lebotclaw.core.agent import Agent, AgentRegistry
     from lebotclaw.core.memory import MemoryStore
+    from lebotclaw.core.wiki import WikiStore
     from lebotclaw.education.heads import HEADSTemplate
     from lebotclaw.tools.registry import ToolRegistry
     from lebotclaw.tools.builtin.calculator import CalculatorTool
@@ -341,6 +342,7 @@ def create_default_registry(model_adapters=None, default_model=None, memory=None
 
     registry = AgentRegistry()
     shared_memory = memory or MemoryStore()
+    shared_wiki = wiki
 
     default_adapter = None
     if model_adapters and default_model:
@@ -358,21 +360,21 @@ def create_default_registry(model_adapters=None, default_model=None, memory=None
     math_tools.register(CalculatorTool())
     math_tools.register(KnowledgeTool())
     registry.register(Agent(name="math", system_prompt=_make_prompt(HEADSTemplate.math_prompt),
-        tools=math_tools, model_adapter=default_adapter, memory=shared_memory))
+        tools=math_tools, model_adapter=default_adapter, memory=shared_memory, wiki=shared_wiki))
 
     # 语文
     chinese_tools = ToolRegistry()
     chinese_tools.register(DictionaryTool())
     chinese_tools.register(KnowledgeTool())
     registry.register(Agent(name="chinese", system_prompt=_make_prompt(HEADSTemplate.chinese_prompt),
-        tools=chinese_tools, model_adapter=qwen_adapter, memory=shared_memory))
+        tools=chinese_tools, model_adapter=qwen_adapter, memory=shared_memory, wiki=shared_wiki))
 
     # 科学
     science_tools = ToolRegistry()
     science_tools.register(KnowledgeTool())
     science_tools.register(TimerTool())
     registry.register(Agent(name="science", system_prompt=_make_prompt(HEADSTemplate.science_prompt),
-        tools=science_tools, model_adapter=default_adapter, memory=shared_memory))
+        tools=science_tools, model_adapter=default_adapter, memory=shared_memory, wiki=shared_wiki))
 
     # 万能
     general_tools = ToolRegistry()
@@ -381,7 +383,7 @@ def create_default_registry(model_adapters=None, default_model=None, memory=None
     general_tools.register(KnowledgeTool())
     general_tools.register(TimerTool())
     registry.register(Agent(name="general", system_prompt=_make_prompt(HEADSTemplate.general_prompt),
-        tools=general_tools, model_adapter=default_adapter, memory=shared_memory))
+        tools=general_tools, model_adapter=default_adapter, memory=shared_memory, wiki=shared_wiki))
 
     return registry
 
@@ -396,6 +398,12 @@ def _get_style_extra(style_name):
 # ── 主入口 ──────────────────────────────────────────────
 
 def main():
+    # lebotclaw web —— 启动 NiceGUI Web UI（含飞书/cron 后台通道）
+    if len(sys.argv) > 1 and sys.argv[1] == "web":
+        from lebotclaw.web.app import main as web_main
+        web_main()
+        return
+
     # 支持 lebotclaw setup 命令
     if len(sys.argv) > 1 and sys.argv[1] in ("setup", "init", "config"):
         from rich.console import Console

@@ -30,6 +30,10 @@
 - **Task Planner** — 5 套教育规划模板（复习/学习/练习/写作/通用），分步引导
 - **Skill Library** — 成功教学链路自动沉淀为可复用技能模板
 - **Multi-Model Adapters** — DeepSeek / Qwen / GLM / Kimi / Doubao / Seed / InnoSpark 7 个国内模型适配器
+- **Web Dashboard** — `lebotclaw web` 一键启动科技卡通风控制台：流式对话、会话管理、学科切换、记忆/知识库/计划/定时任务可视化，三主题（白天/护眼/夜间）
+- **Multi-Channel** — 飞书原生通道（WebSocket 长连接）+ 通道抽象层，微信留 bridge 接口
+- **Cron Push** — APScheduler 定时任务：每日复习/每周总结/间隔复习/到点提醒，自动推送到 IM
+- **L2 Wiki Knowledge** — 结构化知识库，n-gram 检索注入 system prompt，回答有据可依
 - **Setup Wizard** — 4 步初始化向导（选模型、选风格、选详细程度、填写学生信息），零门槛上手
 
 ## Architecture
@@ -75,7 +79,18 @@
 
 ```bash
 pip install lebotclaw
+# 或带 Web 控制台 + 飞书通道的完整版
+pip install "lebotclaw[all]"
 ```
+
+### Web Dashboard（推荐）
+
+```bash
+lebotclaw setup   # 首次：配置模型 Key + 学生信息
+lebotclaw web     # 打开 http://127.0.0.1:8080 —— 流式对话 / 记忆 / 知识库 / 计划 / 定时任务
+```
+
+详见 [docs/web-ui.md](docs/web-ui.md)。
 
 ### 5 Lines to Run
 

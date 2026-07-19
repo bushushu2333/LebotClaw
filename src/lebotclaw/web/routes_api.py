@@ -1,0 +1,243 @@
+"""/api/* 路由（挂在 NiceGUI 的 FastAPI app 上）。
+
+供脚本/测试/外部对接使用。聊天同样经 chat_bridge.io_bound，不阻塞事件循环。
+"""
+import json
+
+from fastapi import Request
+from fastapi.responses import JSONResponse, StreamingResponse
+from nicegui import app
+
+from lebotclaw.web.chat_bridge import api_chat, blocking_stream_chat
+
+
+def _authorized(runtime, request: Request) -> bool:
+    """简易 Bearer 校验。api_token 为空则放行（仅本地）。"""
+    token = runtime.config.get("web", {}).get("api_token", "")
+    if not token:
+        return True
+    return request.headers.get("authorization", "") == f"Bearer {token}"
+
+
+def register_api_routes(runtime):
+    @app.get("/api/health")
+    async def health():
+        return {
+            "ok": True,
+            "student": runtime.student_name(),
+            "has_model": runtime.has_model(),
+            "default_model": runtime.default_model,
+            "active_sessions": len(runtime.sessions.list_sessions()) if runtime.sessions else 0,
+        }
+
+    @app.post("/api/chat")
+    async def chat(request: Request):
+        if not _authorized(runtime, request):
+            return JSONResponse({"error": "unauthorized"}, status_code=401)
+        try:
+            payload = await request.json()
+        except Exception:  # noqa: BLE001
+            payload = {}
+        sid = payload.get("session_id") or "api-default"
+        message = payload.get("message", "")
+        ctx = runtime.sessions.get_or_create(sid, channel="web")
+        reply = await api_chat(ctx, message)
+        return {"session_id": ctx.sid, "reply": reply}
+
+    @app.get("/api/chat/stream")
+    async def chat_stream(message: str, session_id: str = "api-stream"):
+        """SSE 流式：chat_stream_with_tools 逐 chunk 输出（保留工具调用）。
+
+        同步 generator 由 Starlette 在 threadpool 迭代，不阻塞事件循环。
+        """
+        ctx = runtime.sessions.get_or_create(session_id, channel="web")
+
+        def gen():
+            for chunk in blocking_stream_chat(ctx, message):
+                yield f"data: {json.dumps({'delta': chunk}, ensure_ascii=False)}\n\n"
+            yield "data: [DONE]\n\n"
+
+        return StreamingResponse(
+            gen(), media_type="text/event-stream",
+            headers={"X-Accel-Buffering": "no", "Cache-Control": "no-cache"},
+        )
+
+    @app.post("/api/bridge/messages")
+    async def bridge_messages(request: Request):
+        """微信 sidecar 占位契约。本期未接 sidecar → 501。"""
+        return JSONResponse(
+            {
+                "error": "wechat bridge not implemented",
+                "hint": "本期微信通道仅留接口，未接 sidecar（规避非官方协议封号风险）",
+            },
+            status_code=501,
+        )
+
+    # ── cron jobs（scheduler 未启用时返回 503）──
+
+    @app.get("/api/jobs")
+    async def list_jobs():
+        if not runtime.scheduler:
+            return JSONResponse({"error": "scheduler disabled"}, status_code=503)
+        return {"jobs": [j.to_dict() for j in runtime.scheduler.list_jobs()]}
+
+    @app.post("/api/jobs")
+    async def create_job(request: Request):
+        if not runtime.scheduler:
+            return JSONResponse({"error": "scheduler disabled"}, status_code=503)
+        from lebotclaw.scheduler.models import Job, TaskType, new_job_id
+        try:
+            payload = await request.json()
+        except Exception:  # noqa: BLE001
+            payload = {}
+        job = Job(
+            id=new_job_id(),
+            task_type=TaskType(payload.get("task_type", "custom_prompt")),
+            cron=payload.get("cron", "0 9 * * *"),
+            prompt=payload.get("prompt", ""),
+            channel=payload.get("channel"),
+            chat_id=payload.get("chat_id"),
+            one_shot=payload.get("one_shot", False),
+            name=(payload.get("prompt") or payload.get("task_type", ""))[:20],
+        )
+        runtime.scheduler.add(job)
+        return {"job": job.to_dict()}
+
+    @app.delete("/api/jobs/{job_id}")
+    async def delete_job(job_id: str):
+        if not runtime.scheduler:
+            return JSONResponse({"error": "scheduler disabled"}, status_code=503)
+        runtime.scheduler.remove(job_id)
+        return {"deleted": job_id}
+
+    @app.post("/api/jobs/{job_id}/run")
+    async def run_job(job_id: str):
+        if not runtime.scheduler:
+            return JSONResponse({"error": "scheduler disabled"}, status_code=503)
+        from nicegui import run
+        result = await run.io_bound(runtime.scheduler.run_now, job_id)
+        return {"run": result}
+
+    # ── dashboard 数据接口 ──
+
+    @app.get("/api/overview")
+    async def overview():
+        """侧栏状态 + 顶栏模型徽标。"""
+        fcfg = runtime.config.get("channels", {}).get("feishu", {})
+        return {
+            "ok": True,
+            "student": runtime.student_name(),
+            "has_model": runtime.has_model(),
+            "default_model": runtime.default_model,
+            "active_sessions": len(runtime.sessions.list_sessions()) if runtime.sessions else 0,
+            "wiki_pages": len(runtime.wiki.list_pages()),
+            "feishu_enabled": bool(fcfg.get("enabled") and fcfg.get("app_id")),
+            "scheduler_enabled": runtime.scheduler is not None,
+        }
+
+    @app.get("/api/memory")
+    async def memory_all():
+        """4 类记忆，dashboard 记忆页用。"""
+        from nicegui import run
+        cats = ["student_profile", "learning_progress", "skill_memory", "session_summary"]
+
+        def _load():
+            return {
+                c: [
+                    {"key": e.key, "content": e.content, "tags": e.tags,
+                     "updated_at": e.updated_at}
+                    for e in reversed(runtime.memory.search_memory(category=c, limit=50))
+                ]
+                for c in cats
+            }
+        return {"memory": await run.io_bound(_load)}
+
+    @app.get("/api/wiki")
+    async def wiki_list():
+        pages = runtime.wiki.list_pages()
+        return {"pages": [
+            {"id": p.id, "title": p.title, "content": p.content,
+             "source": p.source, "tags": p.tags}
+            for p in pages
+        ]}
+
+    @app.post("/api/wiki")
+    async def wiki_add(request: Request):
+        payload = await request.json()
+        title = (payload.get("title") or "").strip()
+        content = (payload.get("content") or "").strip()
+        if not title or not content:
+            return JSONResponse({"error": "title/content required"}, status_code=400)
+        pid = runtime.wiki.add_page(title, content,
+                                    source=payload.get("source", ""),
+                                    tags=payload.get("tags") or [])
+        return {"id": pid}
+
+    @app.delete("/api/wiki/{page_id}")
+    async def wiki_del(page_id: str):
+        runtime.wiki.delete_page(page_id)
+        return {"deleted": page_id}
+
+    @app.post("/api/plan")
+    async def make_plan(request: Request):
+        from nicegui import run
+        from lebotclaw.core.planner import Planner
+        payload = await request.json()
+        goal = (payload.get("goal") or "").strip()
+        if not goal:
+            return JSONResponse({"error": "goal required"}, status_code=400)
+        plan = await run.io_bound(
+            Planner().decompose, goal, "", runtime.config.get("grade", ""))
+        return {"goal": goal, "steps": [
+            {"id": s.id, "title": s.title, "description": s.description,
+             "status": s.status}
+            for s in plan.steps
+        ]}
+
+    @app.get("/api/profile")
+    async def profile_get():
+        return {
+            "name": runtime.config.get("student_name", ""),
+            "grade": runtime.config.get("grade", ""),
+            "style": runtime.config.get("style", "warm"),
+            "has_model": runtime.has_model(),
+            "default_model": runtime.default_model,
+            "available_models": list(runtime.model_adapters.keys()),
+            "profile": runtime.memory.get_student_profile(),
+        }
+
+    @app.post("/api/profile")
+    async def profile_save(request: Request):
+        from lebotclaw.core import cli as cli_mod
+        payload = await request.json()
+        name = (payload.get("name") or "").strip()
+        grade = (payload.get("grade") or "").strip()
+        if name:
+            runtime.memory.save_memory("student_profile", "general", "名字", name, ["名字"])
+        if grade:
+            runtime.memory.save_memory("student_profile", "general", "年级", grade, ["年级"])
+        cfg = cli_mod._load_config()
+        cfg["student_name"] = name
+        cfg["grade"] = grade
+        cli_mod._save_config(cfg)
+        runtime.config["student_name"] = name
+        runtime.config["grade"] = grade
+        return {"ok": True}
+
+    @app.get("/api/session/info")
+    async def session_info(session_id: str = ""):
+        ctx = runtime.sessions.get(session_id) if session_id else None
+        return {"active_subject": ctx.active_name() if ctx else "general"}
+
+    @app.post("/api/session/subject")
+    async def session_subject(request: Request):
+        payload = await request.json()
+        subject = payload.get("subject", "general")
+        ctx = runtime.sessions.get_or_create(payload.get("session_id"), channel="web")
+        with ctx.lock:
+            try:
+                ctx.registry.switch_to(subject)
+                ctx._active_name = subject
+            except KeyError:
+                return JSONResponse({"error": f"unknown subject {subject}"}, status_code=400)
+        return {"active_subject": subject}

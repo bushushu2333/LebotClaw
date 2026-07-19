@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lebotclaw"
-version = "0.1.0"
+version = "0.3.0"
 description = "A CLI Agent Framework for K-12 Education —面向K-12教育的CLI智能体框架"
 readme = "README.md"
 license = {text = "MIT"}
@@ -38,6 +38,18 @@ dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
     "ruff>=0.4.0",
+]
+web = [
+    "nicegui>=2.5,<3.0",
+    "APScheduler>=3.10,<4.0",
+]
+feishu = [
+    "lark-oapi>=1.4.0,<1.5",
+]
+all = [
+    "nicegui>=2.5,<3.0",
+    "APScheduler>=3.10,<4.0",
+    "lark-oapi>=1.4.0,<1.5",
 ]
 
 [project.scripts]

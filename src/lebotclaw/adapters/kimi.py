@@ -34,6 +34,7 @@ class KimiAdapter(ModelAdapter):
                 for tc in choice.message.tool_calls:
                     import json
                     tool_calls.append({
+                        "id": tc.id,
                         "tool_name": tc.function.name,
                         "arguments": json.loads(tc.function.arguments) if isinstance(tc.function.arguments, str) else tc.function.arguments,
                     })

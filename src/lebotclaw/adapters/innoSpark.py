@@ -42,6 +42,7 @@ class InnoSparkAdapter(ModelAdapter):
             if choice.message.tool_calls:
                 for tc in choice.message.tool_calls:
                     tool_calls.append({
+                        "id": tc.id,
                         "tool_name": tc.function.name,
                         "arguments": tc.function.arguments,
                     })

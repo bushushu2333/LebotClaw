@@ -19,6 +19,7 @@ class Agent:
         model_adapter: ModelAdapter = None,
         memory: MemoryStore = None,
         planner: Planner = None,
+        wiki=None,
     ):
         self.name = name
         self.system_prompt = system_prompt
@@ -26,6 +27,7 @@ class Agent:
         self.model_adapter = model_adapter
         self.memory = memory or MemoryStore()
         self.planner = planner or Planner()
+        self.wiki = wiki
         self._history: list[dict] = []
         self._frozen_context_id: Optional[str] = None
 
@@ -57,19 +59,33 @@ class Agent:
 
         if response.tool_calls:
             self._history.append({"role": "user", "content": user_input})
-            self._history.append({
+            # assistant 消息须带 tool_calls 结构（OpenAI/DeepSeek API 要求）
+            asst_msg = {
                 "role": "assistant",
                 "content": response.content or "",
-            })
+                "tool_calls": [
+                    {
+                        "id": tc.get("id", ""),
+                        "type": "function",
+                        "function": {
+                            "name": tc.get("tool_name", ""),
+                            "arguments": tc.get("arguments", "")
+                            if isinstance(tc.get("arguments"), str)
+                            else json.dumps(tc.get("arguments", {}), ensure_ascii=False),
+                        },
+                    }
+                    for tc in response.tool_calls
+                ],
+            }
+            self._history.append(asst_msg)
+            messages.append(asst_msg)
 
             tool_results = self._handle_tool_calls(response.tool_calls)
-
             for tr in tool_results:
                 tool_msg = {
                     "role": "tool",
+                    "tool_call_id": tr.get("tool_call_id", ""),
                     "content": tr.get("output", ""),
-                    "tool_name": tr.get("tool_name", ""),
-                    "success": tr.get("success", False),
                 }
                 messages.append(tool_msg)
                 self._history.append(tool_msg)
@@ -126,6 +142,89 @@ class Agent:
         self._history.append({"role": "assistant", "content": full_response})
         self.memory.summarize_session(self._history)
 
+    def chat_stream_with_tools(self, user_input: str):
+        """流式且不丢工具：先非流式探测 tool_calls，有则执行后第二轮真流式；
+        无工具时把已生成的完整回复按句切分，模拟流式节奏。
+
+        相比 chat_stream（直接 stream、丢弃 tool_calls），本方法保证工具调用被执行，
+        数学/知识库等场景不会算错。
+        """
+        import re
+
+        def _split(text: str, max_len: int = 24):
+            for piece in re.split(r"(?<=[。！？!?\n；;])", text or ""):
+                if piece:
+                    yield piece
+
+        if not user_input.strip():
+            yield "请输入你的问题，我来帮你学习！"
+            return
+
+        enriched_prompt = self._build_system_prompt_with_memory(user_input)
+        messages = [{"role": "system", "content": enriched_prompt}]
+        messages.extend(self._history)
+        messages.append({"role": "user", "content": user_input})
+        tool_schemas = self.tools.list_tools() if self.tools._tools else None
+
+        if self.model_adapter is None:
+            response_text = self._offline_respond(user_input, messages)
+            self._history.append({"role": "user", "content": user_input})
+            self._history.append({"role": "assistant", "content": response_text})
+            self.memory.summarize_session(self._history)
+            for piece in _split(response_text):
+                yield piece
+            return
+
+        # 第一轮：非流式探测工具调用
+        first = self.model_adapter.generate(
+            messages=messages, tools=tool_schemas, temperature=0.7, max_tokens=2048)
+
+        if first.tool_calls:
+            self._history.append({"role": "user", "content": user_input})
+            asst_msg = {
+                "role": "assistant",
+                "content": first.content or "",
+                "tool_calls": [
+                    {
+                        "id": tc.get("id", ""),
+                        "type": "function",
+                        "function": {
+                            "name": tc.get("tool_name", ""),
+                            "arguments": tc.get("arguments", "")
+                            if isinstance(tc.get("arguments"), str)
+                            else json.dumps(tc.get("arguments", {}), ensure_ascii=False),
+                        },
+                    }
+                    for tc in first.tool_calls
+                ],
+            }
+            self._history.append(asst_msg)
+            messages.append(asst_msg)
+            for tr in self._handle_tool_calls(first.tool_calls):
+                tool_msg = {
+                    "role": "tool",
+                    "tool_call_id": tr.get("tool_call_id", ""),
+                    "content": tr.get("output", ""),
+                }
+                messages.append(tool_msg)
+                self._history.append(tool_msg)
+            # 第二轮：真流式
+            collected = []
+            for chunk in self.model_adapter.stream(
+                    messages=messages, tools=tool_schemas, temperature=0.7, max_tokens=2048):
+                collected.append(chunk)
+                yield chunk
+            self._history.append({"role": "assistant", "content": "".join(collected)})
+        else:
+            # 无工具：first 已是完整回复，按句切分模拟流式
+            full = first.content or ""
+            self._history.append({"role": "user", "content": user_input})
+            self._history.append({"role": "assistant", "content": full})
+            for piece in _split(full):
+                yield piece
+
+        self.memory.summarize_session(self._history)
+
     def freeze(self) -> str:
         context_data = {
             "agent_name": self.name,
@@ -164,6 +263,20 @@ class Agent:
             profile_summary = json.dumps(profile, ensure_ascii=False, indent=None)
             prompt_parts.append(f"\n\n学生画像：{profile_summary}")
 
+        if self.wiki:
+            try:
+                wiki_hits = self.wiki.search_relevant(user_input, limit=3)
+            except Exception:  # noqa: BLE001
+                wiki_hits = []
+            if wiki_hits:
+                lines = []
+                for p in wiki_hits:
+                    snippet = p.content[:200] + ("…" if len(p.content) > 200 else "")
+                    lines.append(f"- [{p.title}] {snippet}")
+                prompt_parts.append(
+                    "\n\n📖 知识库参考（以下内容已为你检索好，回答时请**直接采用**，不要再调用 knowledge 工具重复查询，也不要对学生说找不到）：\n"
+                    + "\n".join(lines))
+
         return "\n".join(prompt_parts)
 
     def _handle_tool_calls(self, tool_calls: list[dict]) -> list[dict]:
@@ -181,6 +294,7 @@ class Agent:
             try:
                 result = self.tools.execute(tool_name, **raw_args)
                 results.append({
+                    "tool_call_id": tc.get("id", ""),
                     "tool_name": tool_name,
                     "success": result.success,
                     "output": result.output,
@@ -188,6 +302,7 @@ class Agent:
                 })
             except Exception as e:
                 results.append({
+                    "tool_call_id": tc.get("id", ""),
                     "tool_name": tool_name,
                     "success": False,
                     "output": "",
