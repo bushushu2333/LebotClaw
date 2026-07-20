@@ -29,6 +29,55 @@ def _split(text: str, max_len: int = 24):
             yield piece
 
 
+# 固定日期节日（农历节日如春节/中秋不硬算，交给模型自由发挥）
+_FESTIVALS = {
+    (1, 1): "元旦", (3, 8): "妇女节", (3, 12): "植树节", (4, 1): "愚人节",
+    (5, 1): "劳动节", (5, 4): "青年节", (6, 1): "儿童节", (7, 1): "建党节",
+    (8, 1): "建军节", (9, 10): "教师节", (10, 1): "国庆节", (12, 25): "圣诞节",
+}
+
+
+def _time_context(memory) -> str:
+    """当前时间情境注入：让小博的问候和话题有'生活感'。"""
+    from datetime import datetime
+    now = datetime.now()
+    hour = now.hour
+    if 5 <= hour < 9:
+        slot = "一大早"
+    elif 9 <= hour < 12:
+        slot = "上午"
+    elif 12 <= hour < 14:
+        slot = "中午"
+    elif 14 <= hour < 18:
+        slot = "下午"
+    elif 18 <= hour < 22:
+        slot = "晚上"
+    else:
+        slot = "深夜（如果是深夜，可以关心一句'这么晚还在学习呀，别太累'）"
+
+    lines = [f"现在是{now.strftime('%Y年%m月%d日')} {slot}，星期{'一二三四五六日'[now.weekday()]}。"]
+
+    festival = _FESTIVALS.get((now.month, now.day))
+    if festival:
+        lines.append(f"今天是{festival}，可以自然地带一句节日氛围（比如儿童节给个小惊喜、教师节聊聊喜欢的老师），别生硬。")
+    if now.month in (1, 6) and 10 <= now.day <= 30:
+        lines.append("最近是考试季，如果他提到考试，多给点打气和实用的复习建议。")
+    if (8, 25) <= (now.month, now.day) <= (9, 5):
+        lines.append("正值开学季，可以聊聊新学期的打算。")
+
+    try:
+        birthday = memory.get_student_profile().get("生日", "")
+        if birthday:
+            import re as _re
+            m = _re.search(r"(\d{1,2})\s*[月/-]\s*(\d{1,2})", birthday)
+            if m and (now.month, now.day) == (int(m.group(1)), int(m.group(2))):
+                lines.append(f"🎂 今天是他的生日！一定要主动送上生日祝福，让他感觉到你记得。")
+    except Exception:  # noqa: BLE001
+        pass
+
+    return "【当下时间】" + "".join(lines)
+
+
 class Agent:
 
     def __init__(
@@ -365,6 +414,8 @@ class Agent:
 
     def _build_system_prompt_with_memory(self, user_input: str) -> str:
         prompt_parts = [self.system_prompt]
+
+        prompt_parts.append("\n\n" + _time_context(self.memory))
 
         related = self.memory.search_memory(query=user_input, limit=5)
         if related:

@@ -184,6 +184,12 @@ def register_api_routes(runtime):
             }
         return {"memory": await run.io_bound(_load)}
 
+    @app.get("/api/proactive")
+    async def proactive(consume: bool = False):
+        """小博主动来信：晨间问候/错题间隔重复/生日。consume=1 时标记已发。"""
+        from lebotclaw.web.proactive import pending_messages
+        return {"messages": pending_messages(runtime.memory, consume=consume)}
+
     @app.get("/api/mistakes")
     async def mistakes_list():
         """错题本列表（记忆页页签用），未掌握在前。"""

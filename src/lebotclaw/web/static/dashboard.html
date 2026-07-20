@@ -322,6 +322,13 @@ main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
   font-size: 12px; color: var(--accent2); font-weight: 700;
   background: var(--panel2); border-radius: 999px; padding: 4px 12px; width: fit-content;
 }
+.ev-letter {
+  font-size: 12px; color: #b4690e; font-weight: 800;
+  background: linear-gradient(135deg, #fff3d6, #ffe7bd); border: 1.5px solid #f5cf8a;
+  border-radius: 999px; padding: 4px 12px; width: fit-content;
+}
+[data-theme="night"] .ev-letter, [data-theme="eye"] .ev-letter { color: #e8a94c; background: rgba(245,207,138,.12); border-color: rgba(245,207,138,.35); }
+.quiz-btn { margin-top: 8px; }
 .empty { color: var(--text3); font-size: 12.5px; padding: 6px 0; }
 input[type=text], textarea, select {
   width: 100%; background: var(--bg2); border: 2px solid var(--border2); border-radius: 12px;
@@ -649,6 +656,9 @@ function evHtml(ev) {
   if (ev.type === "route") {
     return `<div class="ev-route">🔀 ${esc(SUBJECT_NAMES[ev.to] || ev.to)}接棒啦</div>`;
   }
+  if (ev.type === "letter") {
+    return `<div class="ev-letter">${ev.kind === "birthday" ? "🎂 小博记得今天！" : "💌 小博主动来信"}</div>`;
+  }
   return "";
 }
 function msgEl(m) {
@@ -660,7 +670,10 @@ function msgEl(m) {
   div.innerHTML = `<div class="avatar">${av}</div>
     <div class="bubble"><div class="who">${who}</div>
     <div class="evbox">${(m.events || []).map(evHtml).join("")}</div>
-    <div class="body">${m.role === "user" ? esc(m.text).replace(/\n/g, "<br>") : md(m.text)}</div></div>`;
+    <div class="body">${m.role === "user" ? esc(m.text).replace(/\n/g, "<br>") : md(m.text)}</div>
+    ${m.action && m.action.mistake_ids && m.action.mistake_ids.length
+      ? `<button class="btn small quiz-btn" data-mids="${m.action.mistake_ids.join(",")}">📝 给我出题挑战</button>` : ""}
+    </div>`;
   return div;
 }
 function renderMsgs() {
@@ -965,10 +978,27 @@ async function submitOnboard() {
 $("#obGo").onclick = submitOnboard;
 $("#obName").addEventListener("keydown", e => { if (e.key === "Enter") submitOnboard(); });
 
+/* ───────── 小博主动来信 ───────── */
+async function checkProactive() {
+  try {
+    const r = await api("api/proactive?consume=1");
+    if (!r.messages || !r.messages.length) return;
+    const list = getMsgs();
+    r.messages.forEach(m => list.push({
+      role: "bot", text: m.text,
+      events: [{ type: "letter", kind: m.kind }],
+      action: m.mistake_ids && m.mistake_ids.length ? { mistake_ids: m.mistake_ids } : undefined,
+    }));
+    saveMsgs(list); renderMsgs();
+  } catch (e) {}
+}
+setInterval(checkProactive, 5 * 60 * 1000);
+
 /* ───────── 启动 ───────── */
 if (!sid) { newConv(); } else { if (!curConv()) { convs.unshift({ sid, title: "对话", created: Date.now() }); saveConvs(); } renderConvList(); renderMsgs(); syncSubject(); }
 refreshStatus();
 checkOnboard();
+setTimeout(checkProactive, 800);
 setInterval(refreshStatus, 30000);
 </script>
 </body>
