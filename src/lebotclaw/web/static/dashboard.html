@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>LebotClaw 小博 · 学习伙伴</title>
+<title>LebotClaw 超级小博 · 学习伙伴</title>
 <link rel="icon" href="static/avatar.png">
 <script>
 // 首屏前应用主题，避免闪烁（默认白天——给小朋友的主模式）
@@ -247,40 +247,53 @@ main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
   flex: 1; background: transparent; border: 0; outline: 0; resize: none;
   color: var(--text); font: inherit; max-height: 140px;
 }
+/* 输入区三件套：📷 🎤 ➤ 统一圆形规格，视觉成一套 */
+#photoBtn, #micBtn {
+  width: 38px; height: 38px; border-radius: 50%; flex-shrink: 0;
+  background: var(--panel2); border: 1.5px solid var(--border2);
+  color: var(--text2); font-size: 16px; cursor: pointer; padding: 0;
+  display: grid; place-items: center;
+  transition: transform .14s, border-color .14s, background .14s, color .14s;
+}
+#photoBtn:hover, #micBtn:hover {
+  transform: translateY(-1px); border-color: var(--accent);
+  color: var(--accent); background: var(--hover);
+}
+#micBtn.recording {
+  background: var(--accent-grad); border-color: transparent; color: #fff;
+  animation: micPulse 1.2s ease-in-out infinite;
+}
+@keyframes micPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255,125,31,.45); }
+  50% { box-shadow: 0 0 0 7px rgba(255,125,31,0); }
+}
 #sendBtn {
-  width: 42px; height: 42px; border-radius: 50%; border: 0; cursor: pointer;
-  background: var(--accent-grad); color: #fff; font-size: 17px;
+  width: 40px; height: 40px; border-radius: 50%; border: 0; cursor: pointer;
+  background: var(--accent-grad); color: #fff; font-size: 16px;
   display: grid; place-items: center; flex-shrink: 0;
-  box-shadow: var(--shadow-accent); transition: transform .12s;
+  box-shadow: var(--shadow-accent); transition: transform .12s, opacity .12s;
 }
-#sendBtn:hover { transform: scale(1.08) rotate(-8deg); }
-#sendBtn:disabled { opacity: .45; cursor: not-allowed; transform: none; }
-#photoBtn {
-  background: none; border: none; font-size: 21px; cursor: pointer; padding: 6px;
-  border-radius: 50%; transition: transform .15s; flex-shrink: 0;
-}
-#photoBtn:hover { transform: scale(1.15); }
+#sendBtn:hover:not(:disabled) { transform: scale(1.08) rotate(-8deg); }
+#sendBtn:disabled { opacity: .45; cursor: not-allowed; }
 #imgChip {
-  display: flex; align-items: center; gap: 8px; margin-bottom: 6px;
-  background: var(--panel2); border: 1.5px solid var(--border); border-radius: 12px;
-  padding: 6px 10px; width: fit-content;
+  display: flex; align-items: center; gap: 10px; width: fit-content;
+  max-width: 920px; margin: 0 auto 8px;
+  background: var(--panel); border: 1.5px solid var(--border2); border-radius: 14px;
+  padding: 6px 10px 6px 6px; box-shadow: var(--shadow);
 }
-#imgChip img { height: 44px; border-radius: 8px; }
-#imgChip span { cursor: pointer; color: var(--text3); font-weight: 700; }
-#imgChip span:hover { color: var(--red); }
+#imgChip img { height: 42px; width: 42px; object-fit: cover; border-radius: 10px; }
+#imgChip span {
+  cursor: pointer; color: var(--text3); font-weight: 800; font-size: 13px;
+  width: 20px; height: 20px; display: grid; place-items: center; border-radius: 50%;
+  transition: background .14s, color .14s;
+}
+#imgChip span:hover { color: #fff; background: var(--red); }
 .msg-img { max-width: 220px; border-radius: 12px; display: block; margin-bottom: 6px; }
 .tts-btn {
   position: absolute; right: 10px; bottom: 8px; background: none; border: none;
   font-size: 14px; cursor: pointer; opacity: .55; transition: opacity .15s, transform .15s;
 }
 .tts-btn:hover { opacity: 1; transform: scale(1.15); }
-#micBtn {
-  background: none; border: none; font-size: 19px; cursor: pointer; padding: 6px;
-  border-radius: 50%; transition: transform .15s; flex-shrink: 0;
-}
-#micBtn:hover { transform: scale(1.15); }
-#micBtn.recording { animation: micPulse 1.2s ease-in-out infinite; }
-@keyframes micPulse { 0%, 100% { filter: none; } 50% { filter: drop-shadow(0 0 6px var(--red)); } }
 .hint { max-width: 920px; margin: 8px auto 0; font-size: 11.5px; color: var(--text3); text-align: center; }
 
 /* markdown */
@@ -483,8 +496,8 @@ label.f { display: block; font-size: 12.5px; font-weight: 700; color: var(--text
 <div id="app">
   <aside id="sidebar">
     <div class="brand">
-      <img class="paw" src="static/avatar.png" alt="小博">
-      <div><div class="name">LebotClaw</div><div class="sub">小博 · 学习伙伴控制台</div></div>
+      <img class="paw" src="static/avatar.png" alt="超级小博">
+      <div><div class="name">LebotClaw</div><div class="sub">超级小博 · 学习伙伴控制台</div></div>
     </div>
     <nav id="nav">
       <button data-tab="chat" class="active"><span class="ico">💬</span>对话</button>
@@ -526,10 +539,10 @@ label.f { display: block; font-size: 12.5px; font-weight: 700; color: var(--text
             <button id="photoBtn" title="拍照讲题">📷</button>
             <button id="micBtn" title="语音输入" class="hidden">🎤</button>
             <input type="file" id="photoInput" accept="image/*" style="display:none">
-            <textarea id="inp" rows="1" placeholder="问小博点什么吧…（Enter 发送，Shift+Enter 换行）"></textarea>
+            <textarea id="inp" rows="1" placeholder="问超级小博点什么吧…（Enter 发送，Shift+Enter 换行）"></textarea>
             <button id="sendBtn" title="发送">➤</button>
           </div>
-          <div class="hint">小博会自动找最合适的学科小伙伴回答 · 数学计算走计算器保证准确 · 会记住你的学习情况</div>
+          <div class="hint">超级小博会自动找最合适的学科小伙伴回答 · 数学计算走计算器保证准确 · 会记住你的学习情况</div>
         </div>
       </div>
     </section>
@@ -552,8 +565,8 @@ label.f { display: block; font-size: 12.5px; font-weight: 700; color: var(--text
 <!-- 首次见面：称呼弹窗 -->
 <div id="onboard" class="hidden">
   <div class="ob-card">
-    <img src="static/avatar_named.png" alt="小博">
-    <h2>嗨！我是小博 🐶</h2>
+    <img src="static/avatar_named.png" alt="超级小博">
+    <h2>嗨！我是超级小博 🐶</h2>
     <p>第一次见面～怎么称呼你呀？</p>
     <input type="text" id="obName" placeholder="你的名字，如：周周" maxlength="12">
     <select id="obGrade">
@@ -663,7 +676,7 @@ async function loadStars() {
     pg.innerHTML = `<h2>🌌 知识星空</h2><div class="desc">每聊透一个知识点、每攻克一道错题，星空就会亮一颗星。</div>
       <div class="card">
         <h3>我的小宇宙 <span class="count">已点亮 ${d.covered_count + d.gold.length} / ${d.stars.length + d.gold.length} 颗</span></h3>
-        <div class="starfield">${starsHtml || `<div class="empty" style="color:#93a">还没有星星，去知识库加几个知识点，再和小博聊聊吧～</div>`}</div>
+        <div class="starfield">${starsHtml || `<div class="empty" style="color:#93a">还没有星星，去知识库加几个知识点，再和超级小博聊聊吧～</div>`}</div>
         <div class="star-legend">
           <span><span class="star lit demo"></span> 聊过的知识点</span>
           <span><span class="star demo"></span> 还没聊到的</span>
@@ -676,7 +689,7 @@ async function loadStars() {
 /* ───────── 家长周报 ───────── */
 async function loadReport() {
   const pg = $("#reportPage");
-  pg.innerHTML = `<h2>📊 家长周报</h2><div class="desc">小博每周把孩子的学习情况整理成给家长看的报告。</div>加载中…`;
+  pg.innerHTML = `<h2>📊 家长周报</h2><div class="desc">超级小博每周把孩子的学习情况整理成给家长看的报告。</div>加载中…`;
   try {
     const d = await api("api/report/weekly");
     const s = d.stats || {};
@@ -686,18 +699,18 @@ async function loadReport() {
       ["🎯", "本周挑战", `${s.quizzes_this_week ?? 0} 套`, `全对 ${s.quizzes_passed ?? 0} 套`],
       ["💬", "本周对话", `${s.chat_sessions ?? 0} 次`, s.period || ""],
     ];
-    pg.innerHTML = `<h2>📊 家长周报</h2><div class="desc">小博每周把孩子的学习情况整理成给家长看的报告。</div>
+    pg.innerHTML = `<h2>📊 家长周报</h2><div class="desc">超级小博每周把孩子的学习情况整理成给家长看的报告。</div>
       <div class="stat-tiles">${tiles.map(t =>
         `<div class="stat-tile"><div class="st-ico">${t[0]}</div><div class="st-k">${t[1]}</div>
          <div class="st-v">${t[2]}</div><div class="st-sub">${esc(t[3])}</div></div>`).join("")}</div>
       <div class="card"><h3>本周报告 ${d.generated_at ? `<span class="count">生成于 ${new Date(d.generated_at * 1000).toLocaleString("zh-CN")}</span>` : ""}</h3>
         ${d.report
           ? `<div class="report-body">${md(d.report)}</div>`
-          : `<div class="empty">（还没有周报，点下面按钮让小博整理一份～）</div>`}
+          : `<div class="empty">（还没有周报，点下面按钮让超级小博整理一份～）</div>`}
         <button class="btn" id="rpGen" style="margin-top:12px">${d.report ? "🔄 重新生成" : "✨ 生成本周周报"}</button>
       </div>`;
     $("#rpGen").onclick = async () => {
-      toast("小博正在整理这一周的学习情况… ⏳");
+      toast("超级小博正在整理这一周的学习情况… ⏳");
       try { await api("api/report/weekly/refresh", { method: "POST", body: {} }); loadReport(); toast("周报已生成 ✓"); }
       catch (e) { toast("生成失败：" + e.message); }
     };
@@ -789,7 +802,7 @@ async function syncSubject() {
   renderSubjectBar();
 }
 
-const BOT_AVATAR = '<img src="static/avatar.png" alt="小博">';
+const BOT_AVATAR = '<img src="static/avatar.png" alt="超级小博">';
 const TOOL_META = {
   calculator: ["🧮", "计算器"], dictionary: ["📖", "字典"], knowledge: ["📚", "知识库"],
   timer: ["⏱️", "计时器"], mistake_book: ["📒", "错题本"], word_bank: ["📝", "生词本"],
@@ -810,14 +823,14 @@ function evHtml(ev) {
     return `<div class="ev-route">🔀 ${esc(SUBJECT_NAMES[ev.to] || ev.to)}接棒啦</div>`;
   }
   if (ev.type === "letter") {
-    return `<div class="ev-letter">${ev.kind === "birthday" ? "🎂 小博记得今天！" : "💌 小博主动来信"}</div>`;
+    return `<div class="ev-letter">${ev.kind === "birthday" ? "🎂 超级小博记得今天！" : "💌 超级小博主动来信"}</div>`;
   }
   return "";
 }
 function msgEl(m) {
   const div = document.createElement("div");
   div.className = "msg " + (m.role === "user" ? "user" : "bot");
-  const who = m.role === "user" ? (studentName || "你") : "小博";
+  const who = m.role === "user" ? (studentName || "你") : "超级小博";
   const av = m.role === "user"
     ? '<img src="static/student.png" alt="" onerror="this.outerHTML=\'🧒\'">' : BOT_AVATAR;
   div.innerHTML = `<div class="avatar">${av}</div>
@@ -831,14 +844,14 @@ function msgEl(m) {
   if (m.quiz) renderQuiz(div.querySelector(".quiz-wrap"), m);
   if (m.role !== "user" && m.text) {
     const tb = document.createElement("button");
-    tb.className = "tts-btn"; tb.textContent = "🔊"; tb.title = "听小博说";
+    tb.className = "tts-btn"; tb.textContent = "🔊"; tb.title = "听超级小博说";
     tb.onclick = () => playTTS(m.text, tb);
     div.querySelector(".bubble").appendChild(tb);
   }
   return div;
 }
 
-/* ───────── 小博开口说话 ───────── */
+/* ───────── 超级小博开口说话 ───────── */
 let curAudio = null, curTtsBtn = null;
 function playTTS(text, btn) {
   if (curAudio) { curAudio.pause(); if (curTtsBtn) curTtsBtn.textContent = "🔊"; }
@@ -885,7 +898,7 @@ async function answerQuiz(wrap, m, qi, choice) {
 }
 async function startQuizFor(mids) {
   document.querySelector('button[data-tab="chat"]').click();
-  toast("小博正在翻你的错题本出题… ⏳");
+  toast("超级小博正在翻你的错题本出题… ⏳");
   try {
     const r = await api("api/quiz/generate", { method: "POST", body: { mistake_ids: mids, count: 3 } });
     const list = getMsgs();
@@ -903,8 +916,8 @@ function renderMsgs() {
   const list = getMsgs();
   if (!list.length) {
     box.innerHTML = `<div id="welcome">
-      <img src="static/avatar_named.png" alt="小博">
-      <h2>${studentName ? studentName + "，你好呀！" : "你好呀，"}我是小博 🐶</h2>
+      <img src="static/avatar_named.png" alt="超级小博">
+      <h2>${studentName ? studentName + "，你好呀！" : "你好呀，"}我是超级小博 🐶</h2>
       <p>你的 AI 学习伙伴～数学、语文、科学都可以问我，</p>
       <p>我会自动找最合适的学科小伙伴来帮你！</p>
       <div class="sugg">
@@ -1065,10 +1078,10 @@ const MEM_CATS = [
 ];
 async function loadMemory() {
   const pg = $("#memoryPage");
-  pg.innerHTML = `<h2>🧠 学习记忆</h2><div class="desc">小博在聊天中自动记住的信息，越聊越懂你。</div>加载中…`;
+  pg.innerHTML = `<h2>🧠 学习记忆</h2><div class="desc">超级小博在聊天中自动记住的信息，越聊越懂你。</div>加载中…`;
   try {
     const [d, mk, wk] = await Promise.all([api("api/memory"), api("api/mistakes"), api("api/words")]);
-    pg.innerHTML = `<h2>🧠 学习记忆</h2><div class="desc">小博在聊天中自动记住的信息，越聊越懂你。</div>` +
+    pg.innerHTML = `<h2>🧠 学习记忆</h2><div class="desc">超级小博在聊天中自动记住的信息，越聊越懂你。</div>` +
       `<div class="grid2">` + MEM_CATS.map(([cat, label]) => {
         const items = d.memory[cat] || [];
         return `<div class="card"><h3>${label} <span class="count">${items.length} 条</span></h3>` +
@@ -1084,11 +1097,11 @@ async function loadMemory() {
             `</div></div>`).join("") +
             (mk.items.some(i => !i.mastered)
               ? `<button class="btn" id="mkQuiz" style="margin-top:10px">📝 针对错题出套专属题</button>` : "")
-          : `<div class="empty">（暂无错题。做题错了，小博会主动问你要不要记～）</div>`) + `</div>
+          : `<div class="empty">（暂无错题。做题错了，超级小博会主动问你要不要记～）</div>`) + `</div>
         <div class="card"><h3>📝 生词本 <span class="count">${wk.items.length} 条</span></h3>` +
           (wk.items.length ? wk.items.slice(0, 30).map(i =>
             `<div class="kv"><div class="k">${i.mastered ? "✅" : "📌"} ${esc(i.word)}</div><div class="v">${esc(i.pinyin ? i.pinyin + " " : "")}${esc(i.meaning || "")}</div></div>`).join("")
-          : `<div class="empty">（暂无生词。遇到新词，小博会主动问你要不要收～）</div>`) + `</div>
+          : `<div class="empty">（暂无生词。遇到新词，超级小博会主动问你要不要收～）</div>`) + `</div>
       </div>`;
     const mkBtn = $("#mkQuiz");
     if (mkBtn) mkBtn.onclick = () => startQuizFor(mk.items.filter(i => !i.mastered).map(i => i.id));
@@ -1100,11 +1113,11 @@ async function loadWiki() {
   const pg = $("#wikiPage");
   let pages = [];
   try { pages = (await api("api/wiki")).pages; } catch (e) {}
-  pg.innerHTML = `<h2>📚 知识库</h2><div class="desc">结构化知识页——回答相关问题时小博会自动检索引用，让回答有据可依。</div>
+  pg.innerHTML = `<h2>📚 知识库</h2><div class="desc">结构化知识页——回答相关问题时超级小博会自动检索引用，让回答有据可依。</div>
     <div class="card"><h3>添加知识页</h3>
       <label class="f">标题</label><input type="text" id="wTitle" placeholder="如：光合作用 / 分数加减法">
       <label class="f">来源（可选）</label><input type="text" id="wSource" placeholder="如：人教版三年级下册">
-      <label class="f">内容</label><textarea id="wContent" placeholder="知识点讲解，小博会按学生问题自动检索引用"></textarea>
+      <label class="f">内容</label><textarea id="wContent" placeholder="知识点讲解，超级小博会按学生问题自动检索引用"></textarea>
       <label class="f">标签（逗号分隔，可选）</label><input type="text" id="wTags">
       <button class="btn" id="wAdd">添加</button>
     </div>
@@ -1116,7 +1129,7 @@ async function loadWiki() {
             <button class="btn small danger" data-del="${p.id}">删除</button></span></div>
           <div class="snippet">${esc(p.content.slice(0, 180))}${p.content.length > 180 ? "…" : ""}</div>
           ${p.tags ? `<div>${p.tags.split(",").map(t => `<span class="tag">${esc(t)}</span>`).join(" ")}</div>` : ""}
-        </div>`).join("") : `<div class="empty">（暂无。添加后，小博回答相关问题时会自动引用～）</div>`
+        </div>`).join("") : `<div class="empty">（暂无。添加后，超级小博回答相关问题时会自动引用～）</div>`
     }</div></div>`;
   $("#wAdd").onclick = async () => {
     const title = $("#wTitle").value.trim(), content = $("#wContent").value.trim();
@@ -1165,7 +1178,7 @@ async function loadJobs() {
   const pg = $("#jobsPage");
   let jobs = null, err = null;
   try { jobs = (await api("api/jobs")).jobs; } catch (e) { err = e; }
-  let body = `<h2>⏰ 定时任务</h2><div class="desc">到点自动跑小博生成复习清单/总结，推送到飞书等通道。</div>`;
+  let body = `<h2>⏰ 定时任务</h2><div class="desc">到点自动跑超级小博生成复习清单/总结，推送到飞书等通道。</div>`;
   if (err) {
     body += `<div class="card"><h3>调度器未启用</h3>
       <div class="empty">编辑 <code>~/.lebotclaw/config.json</code>，把 <code>scheduler.enabled</code> 设为 <code>true</code> 并配置飞书 <code>default_chat_id</code>，重启后生效。</div></div>`;
@@ -1219,18 +1232,18 @@ async function loadSettings() {
         <div class="mc-name">${esc(o.name)}</div>
         <div class="mc-tag">${esc(o.tag)}</div>
       </div>`).join("");
-    pg.innerHTML = `<h2>⚙️ 设置</h2><div class="desc">学生信息会被小博记住，用于因材施教。</div>
+    pg.innerHTML = `<h2>⚙️ 设置</h2><div class="desc">学生信息会被超级小博记住，用于因材施教。</div>
       <div class="grid2">
       <div class="card"><h3>学生信息</h3>
         <label class="f">名字</label><input type="text" id="sName" value="${esc(p.name)}" placeholder="小朋友的名字">
         <label class="f">年级</label><input type="text" id="sGrade" value="${esc(p.grade)}" placeholder="如：四年级">
         <button class="btn" id="sSave">保存</button>
       </div>
-      <div class="card"><h3>小博的大脑 🧠</h3>
-        <div class="desc" style="margin-bottom:10px">点卡片给小博换颗大脑，秒切不用等。</div>
+      <div class="card"><h3>超级小博的大脑 🧠</h3>
+        <div class="desc" style="margin-bottom:10px">点卡片给超级小博换颗大脑，秒切不用等。</div>
         <div class="model-grid">${cardsHtml}</div>
       </div></div>
-      <div class="card"><h3>学生画像（小博记住的你）</h3>${
+      <div class="card"><h3>学生画像（超级小博记住的你）</h3>${
         Object.keys(p.profile).length ? Object.entries(p.profile).map(([k, v]) =>
           `<div class="kv"><div class="k">${esc(k)}</div><div class="v">${esc(v)}</div></div>`).join("")
         : `<div class="empty">（暂无画像，聊聊就有了～）</div>`}</div>`;
@@ -1249,7 +1262,7 @@ async function loadSettings() {
         const r = await api("api/models/select", { method: "POST", body: { id: c.dataset.mid } });
         pg.querySelectorAll(".model-card").forEach(x =>
           x.classList.toggle("active", x.dataset.mid === c.dataset.mid));
-        toast("小博换上了 " + r.label + " 🧠"); refreshStatus();
+        toast("超级小博换上了 " + r.label + " 🧠"); refreshStatus();
       } catch (e) { toast("切换失败：" + e.message); }
       pg.querySelectorAll(".model-card").forEach(x => x.classList.remove("switching"));
     });
@@ -1270,7 +1283,7 @@ async function checkOnboard() {
 }
 async function submitOnboard() {
   const name = $("#obName").value.trim();
-  if (!name) { toast("告诉小博你的名字嘛～"); $("#obName").focus(); return; }
+  if (!name) { toast("告诉超级小博你的名字嘛～"); $("#obName").focus(); return; }
   const grade = $("#obGrade").value;
   try {
     await api("api/profile", { method: "POST", body: { name, grade } });
@@ -1283,7 +1296,7 @@ async function submitOnboard() {
 $("#obGo").onclick = submitOnboard;
 $("#obName").addEventListener("keydown", e => { if (e.key === "Enter") submitOnboard(); });
 
-/* ───────── 小博主动来信 ───────── */
+/* ───────── 超级小博主动来信 ───────── */
 async function checkProactive() {
   try {
     const r = await api("api/proactive?consume=1");
