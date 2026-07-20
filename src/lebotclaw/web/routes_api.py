@@ -184,6 +184,27 @@ def register_api_routes(runtime):
             }
         return {"memory": await run.io_bound(_load)}
 
+    @app.get("/api/report/weekly")
+    async def report_weekly():
+        """家长周报：有缓存先返回缓存（带上 stats 供页面渲染）。"""
+        from lebotclaw.web import report as report_mod
+        d = report_mod.cached_report()
+        if not d:
+            return {"report": None, "stats": report_mod.collect_stats(runtime.memory)}
+        return {"report": d["text"], "generated_at": d["generated_at"], "stats": d.get("stats", {})}
+
+    @app.post("/api/report/weekly/refresh")
+    async def report_weekly_refresh():
+        """重新生成周报（LLM 阻塞调用走 io_bound）。"""
+        from nicegui import run
+        from lebotclaw.web import report as report_mod
+        adapter = runtime.model_adapters.get(runtime.default_model)
+        if adapter is None:
+            return JSONResponse({"error": "no model"}, status_code=503)
+        text = await run.io_bound(report_mod.generate_report, adapter, runtime.memory)
+        d = report_mod.cached_report() or {}
+        return {"report": text, "generated_at": d.get("generated_at"), "stats": d.get("stats", {})}
+
     @app.post("/api/quiz/generate")
     async def quiz_generate(request: Request):
         """按错题生成专属选择题（LLM 出题，走 io_bound 不阻塞事件循环）。"""
