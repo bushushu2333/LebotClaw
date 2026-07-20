@@ -357,6 +357,28 @@ main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
 .stat-tile .st-sub { font-size: 11px; color: var(--text3); margin-top: 2px; }
 .report-body { font-size: 14px; line-height: 1.8; color: var(--text); }
 .report-body h1, .report-body h2, .report-body h3 { font-size: 15px; margin: 10px 0 4px; }
+/* 知识星空 */
+.starfield {
+  position: relative; height: 420px; border-radius: 16px; overflow: hidden;
+  background: radial-gradient(ellipse at 30% 20%, #1b2451 0%, #0d1230 55%, #070a1e 100%);
+}
+.star {
+  position: absolute; width: 7px; height: 7px; border-radius: 50%;
+  background: #5a6489; opacity: .55; cursor: default; transform: translate(-50%, -50%);
+}
+.star.lit {
+  background: #ffd76a; opacity: 1;
+  box-shadow: 0 0 10px 3px rgba(255, 215, 106, .55), 0 0 24px 8px rgba(255, 215, 106, .2);
+  animation: twinkle 2.6s ease-in-out infinite;
+}
+.star.gold {
+  background: none; opacity: 1; color: #ffb52e; font-size: 17px; width: auto; height: auto;
+  text-shadow: 0 0 10px rgba(255, 181, 46, .8), 0 0 22px rgba(255, 181, 46, .4);
+  animation: twinkle 3.2s ease-in-out infinite;
+}
+.star.demo { position: static; display: inline-block; transform: none; vertical-align: middle; margin-right: 4px; }
+@keyframes twinkle { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(1.45); } }
+.star-legend { display: flex; gap: 18px; font-size: 12px; color: var(--text2); margin-top: 10px; flex-wrap: wrap; }
 .empty { color: var(--text3); font-size: 12.5px; padding: 6px 0; }
 input[type=text], textarea, select {
   width: 100%; background: var(--bg2); border: 2px solid var(--border2); border-radius: 12px;
@@ -445,6 +467,7 @@ label.f { display: block; font-size: 12.5px; font-weight: 700; color: var(--text
       <button data-tab="plan"><span class="ico">🗺️</span>学习计划</button>
       <button data-tab="jobs"><span class="ico">⏰</span>定时任务</button>
       <button data-tab="report"><span class="ico">📊</span>家长周报</button>
+      <button data-tab="stars"><span class="ico">🌌</span>知识星空</button>
       <button data-tab="settings"><span class="ico">⚙️</span>设置</button>
     </nav>
     <div class="side-foot" id="statusBox">
@@ -490,6 +513,7 @@ label.f { display: block; font-size: 12.5px; font-weight: 700; color: var(--text
     <!-- 任务 -->
     <section id="view-jobs" class="view hidden"><div class="page" id="jobsPage"></div></section>
     <section id="view-report" class="view hidden"><div class="page" id="reportPage"></div></section>
+    <section id="view-stars" class="view hidden"><div class="page" id="starsPage"></div></section>
     <!-- 设置 -->
     <section id="view-settings" class="view hidden"><div class="page" id="settingsPage"></div></section>
   </main>
@@ -582,9 +606,42 @@ function toast(msg, ms = 2200) {
 }
 
 /* ───────── 导航 ───────── */
-const TABS = { chat: "对话", memory: "记忆", wiki: "知识库", plan: "学习计划", jobs: "定时任务", report: "家长周报", settings: "设置" };
+const TABS = { chat: "对话", memory: "记忆", wiki: "知识库", plan: "学习计划", jobs: "定时任务", report: "家长周报", stars: "知识星空", settings: "设置" };
 let currentTab = "chat";
-const loaders = { memory: loadMemory, wiki: loadWiki, plan: loadPlan, jobs: loadJobs, report: loadReport, settings: loadSettings };
+const loaders = { memory: loadMemory, wiki: loadWiki, plan: loadPlan, jobs: loadJobs, report: loadReport, stars: loadStars, settings: loadSettings };
+
+/* ───────── 知识星空 ───────── */
+function _hashPos(t, salt) {
+  let h = salt || 7;
+  for (const c of t) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+  return { left: (h % 86) + 5, top: ((h >> 9) % 66) + 6 };
+}
+async function loadStars() {
+  const pg = $("#starsPage");
+  pg.innerHTML = `<h2>🌌 知识星空</h2><div class="desc">每聊透一个知识点、每攻克一道错题，星空就会亮一颗星。</div>加载中…`;
+  try {
+    const d = await api("api/starmap");
+    const starsHtml = d.stars.map(s => {
+      const p = _hashPos(s.title, 7);
+      return `<span class="star ${s.covered ? "lit" : ""}" style="left:${p.left}%;top:${p.top}%"
+        title="${esc(s.title)}${s.covered ? `（聊过 ${s.hits} 次）` : "（还没聊到）"}"></span>`;
+    }).join("") + d.gold.map((g, i) => {
+      const p = _hashPos(g.title, 99 + i);
+      return `<span class="star gold" style="left:${p.left}%;top:${p.top + 18}%"
+        title="攻克的错题：${esc(g.title)}">★</span>`;
+    }).join("");
+    pg.innerHTML = `<h2>🌌 知识星空</h2><div class="desc">每聊透一个知识点、每攻克一道错题，星空就会亮一颗星。</div>
+      <div class="card">
+        <h3>我的小宇宙 <span class="count">已点亮 ${d.covered_count + d.gold.length} / ${d.stars.length + d.gold.length} 颗</span></h3>
+        <div class="starfield">${starsHtml || `<div class="empty" style="color:#93a">还没有星星，去知识库加几个知识点，再和小博聊聊吧～</div>`}</div>
+        <div class="star-legend">
+          <span><span class="star lit demo"></span> 聊过的知识点</span>
+          <span><span class="star demo"></span> 还没聊到的</span>
+          <span><span class="star gold demo">★</span> 攻克的错题</span>
+        </div>
+      </div>`;
+  } catch (e) { pg.innerHTML = `<div class="card">加载失败：${esc(e.message)}</div>`; }
+}
 
 /* ───────── 家长周报 ───────── */
 async function loadReport() {

@@ -306,6 +306,14 @@ class Agent:
                 hits = self.wiki.search_relevant(user_input, limit=3)
                 if hits:
                     yield {"type": "wiki", "pages": [p.title for p in hits]}
+                    # 星图埋点：聊过的知识点落 covered.json（星空页点亮用）
+                    try:
+                        from lebotclaw.tools.builtin.store import JsonListStore
+                        store = JsonListStore("~/.lebotclaw/covered.json")
+                        for p in hits:
+                            store.add({"title": p.title})
+                    except Exception:  # noqa: BLE001
+                        pass
             except Exception:  # noqa: BLE001
                 pass
 

@@ -184,6 +184,27 @@ def register_api_routes(runtime):
             }
         return {"memory": await run.io_bound(_load)}
 
+    @app.get("/api/starmap")
+    async def starmap():
+        """知识星图：知识页=星星（聊过的点亮）、已掌握错题=金星。"""
+        from lebotclaw.tools.builtin.store import JsonListStore
+        covered: dict = {}
+        for c in JsonListStore("~/.lebotclaw/covered.json").all():
+            t = c.get("title", "")
+            if t:
+                covered[t] = covered.get(t, 0) + 1
+        stars = [
+            {"title": p.title, "covered": covered.get(p.title, 0) > 0, "hits": covered.get(p.title, 0)}
+            for p in runtime.wiki.list_pages()
+        ]
+        gold = [
+            {"title": i.get("question", "")[:24], "note": i.get("note", "")[:30]}
+            for i in JsonListStore("~/.lebotclaw/mistakes.json").all()
+            if i.get("mastered")
+        ]
+        return {"stars": stars, "gold": gold,
+                "covered_count": sum(1 for s in stars if s["covered"])}
+
     @app.get("/api/report/weekly")
     async def report_weekly():
         """家长周报：有缓存先返回缓存（带上 stats 供页面渲染）。"""
