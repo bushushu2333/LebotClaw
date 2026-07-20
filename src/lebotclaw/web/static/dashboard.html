@@ -329,6 +329,22 @@ main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
 }
 [data-theme="night"] .ev-letter, [data-theme="eye"] .ev-letter { color: #e8a94c; background: rgba(245,207,138,.12); border-color: rgba(245,207,138,.35); }
 .quiz-btn { margin-top: 8px; }
+/* 专属题卡 */
+.quiz-wrap { margin-top: 10px; display: flex; flex-direction: column; gap: 10px; }
+.quiz-q { background: var(--panel2); border: 1.5px solid var(--border); border-radius: 14px; padding: 10px 12px; }
+.quiz-q .qq-t { font-size: 13.5px; font-weight: 700; color: var(--text); margin-bottom: 8px; }
+.quiz-q .qq-opts { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.quiz-opt {
+  border: 1.5px solid var(--border2); border-radius: 10px; padding: 7px 10px;
+  font-size: 13px; color: var(--text); background: var(--panel); cursor: pointer;
+  text-align: left; transition: all .12s;
+}
+.quiz-opt:hover:not(:disabled) { border-color: var(--accent); transform: translateY(-1px); }
+.quiz-opt:disabled { cursor: default; opacity: .85; }
+.quiz-opt.hit { border-color: var(--green); background: rgba(34,181,115,.12); font-weight: 700; }
+.quiz-opt.miss { border-color: var(--red); background: rgba(239,83,80,.12); }
+.quiz-q .qq-explain { font-size: 12px; color: var(--text2); margin-top: 8px; border-top: 1.5px dashed var(--border); padding-top: 6px; }
+.quiz-result { font-size: 13px; font-weight: 800; color: var(--accent2); text-align: center; padding: 4px; }
 .empty { color: var(--text3); font-size: 12.5px; padding: 6px 0; }
 input[type=text], textarea, select {
   width: 100%; background: var(--bg2); border: 2px solid var(--border2); border-radius: 12px;
@@ -673,9 +689,60 @@ function msgEl(m) {
     <div class="body">${m.role === "user" ? esc(m.text).replace(/\n/g, "<br>") : md(m.text)}</div>
     ${m.action && m.action.mistake_ids && m.action.mistake_ids.length
       ? `<button class="btn small quiz-btn" data-mids="${m.action.mistake_ids.join(",")}">📝 给我出题挑战</button>` : ""}
+    ${m.quiz ? `<div class="quiz-wrap" data-qz="${m.quiz.id}"></div>` : ""}
     </div>`;
+  if (m.quiz) renderQuiz(div.querySelector(".quiz-wrap"), m);
   return div;
 }
+
+/* ───────── 专属题卡 ───────── */
+async function renderQuiz(wrap, m) {
+  try {
+    const qz = await api("api/quiz/" + m.quiz.id);
+    wrap.innerHTML = qz.questions.map((q, i) => {
+      const ans = m.quiz.answers[i];
+      return `<div class="quiz-q"><div class="qq-t">第 ${i + 1} 题：${esc(q.q)}</div>
+        <div class="qq-opts">${Object.entries(q.options).map(([k, v]) => {
+          let cls = "quiz-opt";
+          if (ans) { if (k === ans.answer) cls += " hit"; else if (k === ans.choice) cls += " miss"; }
+          return `<button class="${cls}" data-q="${i}" data-c="${k}" ${ans ? "disabled" : ""}>${k}. ${esc(v)}</button>`;
+        }).join("")}</div>
+        ${ans ? `<div class="qq-explain">${ans.correct ? "✅ 答对啦！" : "❌ 正确答案是 " + esc(ans.answer) + "。"}${esc(ans.explain)}</div>` : ""}
+      </div>`;
+    }).join("") + (m.quiz.score !== undefined
+      ? `<div class="quiz-result">${m.quiz.score.passed ? "🎉 全对！相关错题已标记为掌握，太牛了！" : `得分 ${m.quiz.score.hit}/${m.quiz.score.total}，错的题再想想，你可以的！`}</div>` : "");
+    wrap.querySelectorAll(".quiz-opt:not(:disabled)").forEach(b => b.onclick = () => answerQuiz(wrap, m, +b.dataset.q, b.dataset.c));
+  } catch (e) { wrap.innerHTML = `<div class="empty">题卡加载失败：${esc(e.message)}</div>`; }
+}
+async function answerQuiz(wrap, m, qi, choice) {
+  try {
+    const r = await api("api/quiz/answer", { method: "POST", body: { quiz_id: m.quiz.id, q_index: qi, choice } });
+    m.quiz.answers[qi] = { choice, correct: r.correct, answer: r.answer, explain: r.explain };
+    if (r.finished) {
+      const hit = Object.values(m.quiz.answers).filter(a => a.correct).length;
+      m.quiz.score = { hit, total: Object.keys(m.quiz.answers).length, passed: r.passed };
+    }
+    const list = getMsgs(); const sm = list.find(x => x.quiz && x.quiz.id === m.quiz.id);
+    if (sm) { sm.quiz = m.quiz; saveMsgs(list); }
+    renderMsgs();
+    if (r.finished && r.passed) toast("🎉 全对！错题已消 ✅");
+  } catch (e) { toast("判分失败：" + e.message); }
+}
+async function startQuizFor(mids) {
+  document.querySelector('button[data-tab="chat"]').click();
+  toast("小博正在翻你的错题本出题… ⏳");
+  try {
+    const r = await api("api/quiz/generate", { method: "POST", body: { mistake_ids: mids, count: 3 } });
+    const list = getMsgs();
+    list.push({ role: "bot", text: "来啦！这几道题是照着你的错题出的，看看是不是真掌握了：",
+      events: [{ type: "letter", kind: "quiz" }], quiz: { id: r.quiz_id, answers: {} } });
+    saveMsgs(list); renderMsgs();
+  } catch (e) { toast("出题失败：" + e.message); }
+}
+$("#msgs").addEventListener("click", e => {
+  const qb = e.target.closest(".quiz-btn");
+  if (qb) { startQuizFor(qb.dataset.mids.split(",").map(Number)); }
+});
 function renderMsgs() {
   const box = $("#msgs"); box.innerHTML = "";
   const list = getMsgs();
@@ -780,13 +847,17 @@ async function loadMemory() {
           (mk.items.length ? mk.items.slice(0, 20).map(i =>
             `<div class="kv"><div class="k">${i.mastered ? "✅" : "📌"} #${i.id}</div><div class="v">${esc(i.question)}` +
             (i.note ? `<br><span style="color:var(--text3);font-size:12px">易错点：${esc(i.note.length > 60 ? i.note.slice(0, 60) + "…" : i.note)}</span>` : "") +
-            `</div></div>`).join("")
+            `</div></div>`).join("") +
+            (mk.items.some(i => !i.mastered)
+              ? `<button class="btn" id="mkQuiz" style="margin-top:10px">📝 针对错题出套专属题</button>` : "")
           : `<div class="empty">（暂无错题。做题错了，小博会主动问你要不要记～）</div>`) + `</div>
         <div class="card"><h3>📝 生词本 <span class="count">${wk.items.length} 条</span></h3>` +
           (wk.items.length ? wk.items.slice(0, 30).map(i =>
             `<div class="kv"><div class="k">${i.mastered ? "✅" : "📌"} ${esc(i.word)}</div><div class="v">${esc(i.pinyin ? i.pinyin + " " : "")}${esc(i.meaning || "")}</div></div>`).join("")
           : `<div class="empty">（暂无生词。遇到新词，小博会主动问你要不要收～）</div>`) + `</div>
       </div>`;
+    const mkBtn = $("#mkQuiz");
+    if (mkBtn) mkBtn.onclick = () => startQuizFor(mk.items.filter(i => !i.mastered).map(i => i.id));
   } catch (e) { pg.innerHTML = `<div class="card">加载失败：${esc(e.message)}</div>`; }
 }
 

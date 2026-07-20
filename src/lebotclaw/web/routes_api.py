@@ -184,6 +184,41 @@ def register_api_routes(runtime):
             }
         return {"memory": await run.io_bound(_load)}
 
+    @app.post("/api/quiz/generate")
+    async def quiz_generate(request: Request):
+        """按错题生成专属选择题（LLM 出题，走 io_bound 不阻塞事件循环）。"""
+        from nicegui import run
+        from lebotclaw.web import quiz as quiz_mod
+        payload = await request.json()
+        adapter = runtime.model_adapters.get(runtime.default_model)
+        if adapter is None:
+            return JSONResponse({"error": "no model"}, status_code=503)
+        qz = await run.io_bound(
+            quiz_mod.generate_quiz, adapter, runtime.memory,
+            payload.get("mistake_ids") or [], int(payload.get("count", 3)),
+        )
+        if not qz:
+            return JSONResponse({"error": "错题本还是空的，先去聊几道错题吧"}, status_code=400)
+        return {"quiz_id": qz["id"], "count": len(qz["questions"])}
+
+    @app.get("/api/quiz/{quiz_id}")
+    async def quiz_get(quiz_id: str):
+        from lebotclaw.web import quiz as quiz_mod
+        qz = quiz_mod.get_quiz(quiz_id)
+        if not qz:
+            return JSONResponse({"error": "not found"}, status_code=404)
+        return quiz_mod.public_quiz(qz)
+
+    @app.post("/api/quiz/answer")
+    async def quiz_answer(request: Request):
+        from lebotclaw.web import quiz as quiz_mod
+        payload = await request.json()
+        r = quiz_mod.answer_question(
+            payload.get("quiz_id", ""), int(payload.get("q_index", 0)), payload.get("choice", ""))
+        if r is None:
+            return JSONResponse({"error": "not found"}, status_code=404)
+        return r
+
     @app.get("/api/proactive")
     async def proactive(consume: bool = False):
         """小博主动来信：晨间问候/错题间隔重复/生日。consume=1 时标记已发。"""
