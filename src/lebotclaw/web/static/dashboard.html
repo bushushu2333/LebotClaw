@@ -196,7 +196,7 @@ main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
 }
 .msg .avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .msg.user .avatar { background: var(--userbubble); border-color: var(--userborder); }
-.msg .bubble { min-width: 0; flex: 1; }
+.msg .bubble { min-width: 0; flex: 1; position: relative; }
 .msg .who { font-size: 12px; font-weight: 700; color: var(--text3); margin-bottom: 4px; }
 .msg .body {
   background: var(--panel); border: 1.5px solid var(--border); border-radius: 4px 20px 20px 20px;
@@ -269,6 +269,18 @@ main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
 #imgChip span { cursor: pointer; color: var(--text3); font-weight: 700; }
 #imgChip span:hover { color: var(--red); }
 .msg-img { max-width: 220px; border-radius: 12px; display: block; margin-bottom: 6px; }
+.tts-btn {
+  position: absolute; right: 10px; bottom: 8px; background: none; border: none;
+  font-size: 14px; cursor: pointer; opacity: .55; transition: opacity .15s, transform .15s;
+}
+.tts-btn:hover { opacity: 1; transform: scale(1.15); }
+#micBtn {
+  background: none; border: none; font-size: 19px; cursor: pointer; padding: 6px;
+  border-radius: 50%; transition: transform .15s; flex-shrink: 0;
+}
+#micBtn:hover { transform: scale(1.15); }
+#micBtn.recording { animation: micPulse 1.2s ease-in-out infinite; }
+@keyframes micPulse { 0%, 100% { filter: none; } 50% { filter: drop-shadow(0 0 6px var(--red)); } }
 .hint { max-width: 920px; margin: 8px auto 0; font-size: 11.5px; color: var(--text3); text-align: center; }
 
 /* markdown */
@@ -512,6 +524,7 @@ label.f { display: block; font-size: 12.5px; font-weight: 700; color: var(--text
           <div id="imgChip" class="hidden"><img id="imgPrev" alt=""><span id="imgX">✕</span></div>
           <div id="inputBox">
             <button id="photoBtn" title="拍照讲题">📷</button>
+            <button id="micBtn" title="语音输入" class="hidden">🎤</button>
             <input type="file" id="photoInput" accept="image/*" style="display:none">
             <textarea id="inp" rows="1" placeholder="问小博点什么吧…（Enter 发送，Shift+Enter 换行）"></textarea>
             <button id="sendBtn" title="发送">➤</button>
@@ -816,7 +829,25 @@ function msgEl(m) {
     ${m.quiz ? `<div class="quiz-wrap" data-qz="${m.quiz.id}"></div>` : ""}
     </div>`;
   if (m.quiz) renderQuiz(div.querySelector(".quiz-wrap"), m);
+  if (m.role !== "user" && m.text) {
+    const tb = document.createElement("button");
+    tb.className = "tts-btn"; tb.textContent = "🔊"; tb.title = "听小博说";
+    tb.onclick = () => playTTS(m.text, tb);
+    div.querySelector(".bubble").appendChild(tb);
+  }
   return div;
+}
+
+/* ───────── 小博开口说话 ───────── */
+let curAudio = null, curTtsBtn = null;
+function playTTS(text, btn) {
+  if (curAudio) { curAudio.pause(); if (curTtsBtn) curTtsBtn.textContent = "🔊"; }
+  if (curTtsBtn === btn && curAudio) { curAudio = null; curTtsBtn = null; return; }
+  const a = new Audio("api/tts?text=" + encodeURIComponent(text.slice(0, 300)));
+  curAudio = a; curTtsBtn = btn; btn.textContent = "⏸";
+  a.onended = () => { btn.textContent = "🔊"; curAudio = null; curTtsBtn = null; };
+  a.onerror = () => { btn.textContent = "🔊"; toast("语音生成失败"); curAudio = null; curTtsBtn = null; };
+  a.play().catch(() => { btn.textContent = "🔊"; });
 }
 
 /* ───────── 专属题卡 ───────── */
@@ -973,6 +1004,29 @@ $("#photoInput").addEventListener("change", e => {
   e.target.value = "";
 });
 $("#imgX").onclick = () => { pendingImage = ""; $("#imgChip").classList.add("hidden"); };
+
+/* ───────── 语音输入（浏览器 SpeechRecognition，零后端成本）───────── */
+(function initMic() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) return;  // 不支持就保持隐藏
+  const btn = $("#micBtn");
+  btn.classList.remove("hidden");
+  const rec = new SR();
+  rec.lang = "zh-CN"; rec.interimResults = true;
+  let listening = false;
+  btn.onclick = () => {
+    if (listening) { rec.stop(); return; }
+    try { rec.start(); } catch (e) {}
+  };
+  rec.onstart = () => { listening = true; btn.classList.add("recording"); toast("在听啦，说话吧 🎤"); };
+  rec.onend = () => { listening = false; btn.classList.remove("recording"); };
+  rec.onerror = () => { listening = false; btn.classList.remove("recording"); };
+  rec.onresult = e => {
+    let txt = "";
+    for (const r of e.results) txt += r[0].transcript;
+    $("#inp").value = txt;
+  };
+})();
 
 async function sendPhoto(text) {
   const inp = $("#inp");

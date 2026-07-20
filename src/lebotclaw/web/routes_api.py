@@ -10,6 +10,25 @@ from nicegui import app
 
 from lebotclaw.web.chat_bridge import api_chat, blocking_stream_chat, blocking_stream_events
 
+def _tts_bytes(text: str) -> bytes:
+    """edge-tts 生成 mp3。小博是 15 岁男孩 → 云希少年音。去掉 markdown 符号。"""
+    import asyncio
+    import io
+    import re
+    import edge_tts
+
+    clean = re.sub(r"[*#`>\[\]()_~]|https?://\S+", "", text).strip() or "嗯"
+    buf = io.BytesIO()
+
+    async def _go():
+        async for chunk in edge_tts.Communicate(clean, "zh-CN-YunxiNeural").stream():
+            if chunk["type"] == "audio":
+                buf.write(chunk["data"])
+
+    asyncio.run(_go())
+    return buf.getvalue()
+
+
 # 可切换的模型（设置页卡片）
 ARKCODING_MODELS = [
     ("deepseek-v4-pro", "DeepSeek V4 Pro", "最强大脑 · 想得深", "🧠"),
@@ -260,6 +279,15 @@ def register_api_routes(runtime):
         if r is None:
             return JSONResponse({"error": "not found"}, status_code=404)
         return r
+
+    @app.get("/api/tts")
+    async def tts(text: str):
+        """小博开口说话：edge-tts 少年音 mp3（io_bound 生成）。"""
+        from nicegui import run
+        from fastapi.responses import Response
+        audio = await run.io_bound(_tts_bytes, text[:300])
+        return Response(content=audio, media_type="audio/mpeg",
+                        headers={"Cache-Control": "max-age=3600"})
 
     @app.post("/api/chat/photo")
     async def chat_photo(request: Request):
