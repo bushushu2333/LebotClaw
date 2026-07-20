@@ -282,6 +282,26 @@ main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
 .kv:first-of-type { border-top: 0; }
 .kv .k { color: var(--text3); width: 150px; flex-shrink: 0; font-size: 12px; padding-top: 2px; font-weight: 600; }
 .kv .v { color: var(--text); word-break: break-word; }
+/* 模型卡片选择器 */
+.model-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 4px; }
+.model-card {
+  position: relative; border: 2px solid var(--border2); border-radius: 16px;
+  padding: 13px 14px 11px; cursor: pointer; background: var(--panel);
+  transition: border-color .15s, transform .15s, box-shadow .15s, opacity .15s;
+}
+.model-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+.model-card.active { border-color: var(--accent); background: var(--panel2); box-shadow: var(--shadow-accent); }
+.model-card.switching { opacity: .45; pointer-events: none; }
+.model-card .mc-emoji { font-size: 24px; line-height: 1; }
+.model-card .mc-name { font-weight: 800; font-size: 14px; margin-top: 6px; color: var(--text); }
+.model-card .mc-tag { font-size: 12px; color: var(--text2); margin-top: 3px; }
+.model-card .mc-check {
+  position: absolute; top: 8px; right: 10px; width: 20px; height: 20px; border-radius: 50%;
+  background: var(--accent-grad); color: #fff; font-size: 12px; font-weight: 800;
+  display: none; align-items: center; justify-content: center;
+}
+.model-card.active .mc-check { display: flex; }
+.model-card .mc-check:empty::after { content: "✓"; }
 .empty { color: var(--text3); font-size: 12.5px; padding: 6px 0; }
 input[type=text], textarea, select {
   width: 100%; background: var(--bg2); border: 2px solid var(--border2); border-radius: 12px;
@@ -813,12 +833,13 @@ async function loadSettings() {
   const pg = $("#settingsPage");
   try {
     const [p, m] = await Promise.all([api("api/profile"), api("api/models")]);
-    const groups = {};
-    m.options.forEach(o => { (groups[o.group] = groups[o.group] || []).push(o); });
-    const optsHtml = Object.entries(groups).map(([g, os]) =>
-      `<optgroup label="${esc(g)}">` + os.map(o =>
-        `<option value="${esc(o.id)}"${o.id === m.current ? " selected" : ""}>${esc(o.label)}${esc(o.note || "")}</option>`
-      ).join("") + `</optgroup>`).join("");
+    const cardsHtml = m.options.map(o => `
+      <div class="model-card${o.id === m.current ? " active" : ""}" data-mid="${esc(o.id)}">
+        <span class="mc-check"></span>
+        <div class="mc-emoji">${o.emoji}</div>
+        <div class="mc-name">${esc(o.name)}</div>
+        <div class="mc-tag">${esc(o.tag)}</div>
+      </div>`).join("");
     pg.innerHTML = `<h2>⚙️ 设置</h2><div class="desc">学生信息会被小博记住，用于因材施教。</div>
       <div class="grid2">
       <div class="card"><h3>学生信息</h3>
@@ -826,13 +847,9 @@ async function loadSettings() {
         <label class="f">年级</label><input type="text" id="sGrade" value="${esc(p.grade)}" placeholder="如：四年级">
         <button class="btn" id="sSave">保存</button>
       </div>
-      <div class="card"><h3>AI 大脑 🧠</h3>
-        <label class="f">当前模型</label>
-        <select id="sModel" style="width:100%;padding:10px 12px;border-radius:12px;border:2px solid var(--line);background:var(--card);color:var(--ink);font-size:14px;margin-bottom:10px">${optsHtml}</select>
-        <button class="btn" id="sModelSave">切换模型</button>
-        <div class="desc" style="margin-top:10px">火山 Coding 套餐一个 key 四个模型，切换立即生效，不用重启。</div>
-        <div class="kv" style="margin-top:12px"><div class="k">对话风格</div><div class="v">${esc(p.style)}</div></div>
-        <div class="kv"><div class="k">数据目录</div><div class="v" style="font-family:var(--mono);font-size:12px">~/.lebotclaw/</div></div>
+      <div class="card"><h3>小博的大脑 🧠</h3>
+        <div class="desc" style="margin-bottom:10px">点卡片给小博换颗大脑，秒切不用等。</div>
+        <div class="model-grid">${cardsHtml}</div>
       </div></div>
       <div class="card"><h3>学生画像（小博记住的你）</h3>${
         Object.keys(p.profile).length ? Object.entries(p.profile).map(([k, v]) =>
@@ -846,12 +863,17 @@ async function loadSettings() {
         toast("已保存 ✓"); refreshStatus();
       } catch (e) { toast("保存失败：" + e.message); }
     };
-    $("#sModelSave").onclick = async () => {
+    pg.querySelectorAll(".model-card").forEach(c => c.onclick = async () => {
+      if (c.classList.contains("active")) return;
+      pg.querySelectorAll(".model-card").forEach(x => x.classList.add("switching"));
       try {
-        const r = await api("api/models/select", { method: "POST", body: { id: $("#sModel").value } });
-        toast("已切换到 " + r.label + " 🧠"); refreshStatus();
+        const r = await api("api/models/select", { method: "POST", body: { id: c.dataset.mid } });
+        pg.querySelectorAll(".model-card").forEach(x =>
+          x.classList.toggle("active", x.dataset.mid === c.dataset.mid));
+        toast("小博换上了 " + r.label + " 🧠"); refreshStatus();
       } catch (e) { toast("切换失败：" + e.message); }
-    };
+      pg.querySelectorAll(".model-card").forEach(x => x.classList.remove("switching"));
+    });
   } catch (e) { pg.innerHTML = `<div class="card">加载失败：${esc(e.message)}</div>`; }
 }
 

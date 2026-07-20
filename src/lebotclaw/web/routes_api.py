@@ -10,12 +10,12 @@ from nicegui import app
 
 from lebotclaw.web.chat_bridge import api_chat, blocking_stream_chat
 
-# 火山 Coding 套餐可切换的子模型（设置页下拉）
+# 可切换的模型（设置页卡片）
 ARKCODING_MODELS = [
-    ("deepseek-v4-pro", "DeepSeek V4 Pro · 深度求索"),
-    ("glm-5.2", "GLM 5.2 · 智谱"),
-    ("seed-2-1-pro", "Seed 2.1 Pro · 字节"),
-    ("kimi-k2-7", "Kimi K2 · 月之暗面"),
+    ("deepseek-v4-pro", "DeepSeek V4 Pro", "最强大脑 · 想得深", "🧠"),
+    ("glm-5.2", "GLM 5.2", "快如闪电 · 反应快", "⚡"),
+    ("seed-2-1-pro", "Seed 2.1 Pro", "灵感多多 · 点子多", "🎨"),
+    ("kimi-k2-7", "Kimi K2", "长文高手 · 读得多", "📖"),
 ]
 
 
@@ -30,25 +30,13 @@ def _authorized(runtime, request: Request) -> bool:
 def register_api_routes(runtime):
     @app.get("/api/models")
     async def models_list():
-        """设置页模型下拉：火山 Coding 子模型 + 其他已配 key 的适配器。"""
-        options = []
-        current = ""
-        if "arkcoding" in runtime.model_adapters:
-            sub = runtime.model_adapters["arkcoding"].model
-            for mid, label in ARKCODING_MODELS:
-                options.append({
-                    "id": f"arkcoding:{mid}", "label": label,
-                    "group": "火山 Coding 套餐",
-                    "note": "（当前实际为 k2.6）" if mid == "kimi-k2-7" else "",
-                })
-            if runtime.default_model == "arkcoding":
-                current = f"arkcoding:{sub}"
-        for name in runtime.model_adapters:
-            if name == "arkcoding":
-                continue
-            options.append({"id": name, "label": f"{name}（官方 API）", "group": "备用", "note": ""})
-            if runtime.default_model == name:
-                current = name
+        """设置页模型卡片：仅开放套餐内子模型（官方 API 按量计费，不开放切换）。"""
+        sub = runtime.model_adapters["arkcoding"].model if "arkcoding" in runtime.model_adapters else ""
+        options = [
+            {"id": f"arkcoding:{mid}", "name": name, "tag": tag, "emoji": emoji}
+            for mid, name, tag, emoji in ARKCODING_MODELS
+        ]
+        current = f"arkcoding:{sub}" if runtime.default_model == "arkcoding" else ""
         return {"current": current, "options": options, "label": runtime.model_label()}
 
     @app.post("/api/models/select")
@@ -56,14 +44,10 @@ def register_api_routes(runtime):
         payload = await request.json()
         sel = (payload.get("id") or "").strip()
         adapter_name, _, sub = sel.partition(":")
-        if adapter_name == "arkcoding":
-            valid = {m for m, _ in ARKCODING_MODELS}
-            if sub not in valid:
-                return JSONResponse({"error": f"unknown model {sel}"}, status_code=400)
-        try:
-            runtime.switch_model(adapter_name, sub)
-        except KeyError:
-            return JSONResponse({"error": f"unknown adapter {adapter_name}"}, status_code=400)
+        valid = {m for m, _, _, _ in ARKCODING_MODELS}
+        if adapter_name != "arkcoding" or sub not in valid:
+            return JSONResponse({"error": f"unknown model {sel}"}, status_code=400)
+        runtime.switch_model(adapter_name, sub)
         return {"ok": True, "current": sel, "label": runtime.model_label()}
 
     @app.get("/api/health")
