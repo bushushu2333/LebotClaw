@@ -302,6 +302,26 @@ main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
 }
 .model-card.active .mc-check { display: flex; }
 .model-card .mc-check:empty::after { content: "✓"; }
+/* 聊天事件卡片：工具调用/知识引用/学科切换 */
+.evbox { display: flex; flex-direction: column; gap: 6px; margin: 2px 0 6px; }
+.evbox:empty { display: none; }
+.ev-tool {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  background: var(--panel2); border: 1.5px dashed var(--border2);
+  border-radius: 12px; padding: 7px 11px; font-size: 12.5px; color: var(--text2);
+}
+.ev-tool .et-name { font-weight: 800; color: var(--accent2); }
+.ev-tool .et-io { font-family: var(--mono); font-size: 12px; word-break: break-all; }
+.ev-tool .et-io b { color: var(--text); }
+.ev-tool.et-fail .et-name { color: var(--red); }
+.ev-wiki {
+  font-size: 12px; color: var(--text2); background: var(--panel2);
+  border-radius: 999px; padding: 4px 12px; width: fit-content;
+}
+.ev-route {
+  font-size: 12px; color: var(--accent2); font-weight: 700;
+  background: var(--panel2); border-radius: 999px; padding: 4px 12px; width: fit-content;
+}
 .empty { color: var(--text3); font-size: 12.5px; padding: 6px 0; }
 input[type=text], textarea, select {
   width: 100%; background: var(--bg2); border: 2px solid var(--border2); border-radius: 12px;
@@ -610,6 +630,27 @@ async function syncSubject() {
 }
 
 const BOT_AVATAR = '<img src="static/avatar.png" alt="小博">';
+const TOOL_META = {
+  calculator: ["🧮", "计算器"], dictionary: ["📖", "字典"], knowledge: ["📚", "知识库"],
+  timer: ["⏱️", "计时器"], mistake_book: ["📒", "错题本"], word_bank: ["📝", "生词本"],
+};
+const SUBJECT_NAMES = { math: "数学问伴", chinese: "语文问伴", science: "科学问伴", general: "万能问伴" };
+function evHtml(ev) {
+  if (ev.type === "tool") {
+    const [ico, nm] = TOOL_META[ev.name] || ["🔧", ev.name];
+    const io = ev.input
+      ? esc(ev.input) + (ev.output ? " → <b>" + esc(ev.output) + "</b>" : "")
+      : esc(ev.output || "");
+    return `<div class="ev-tool${ev.success === false ? " et-fail" : ""}"><span>${ico}</span><span class="et-name">${esc(nm)}</span><span class="et-io">${io}</span></div>`;
+  }
+  if (ev.type === "wiki") {
+    return `<div class="ev-wiki">📚 参考了知识库 ${ev.pages.map(p => "《" + esc(p) + "》").join(" ")}</div>`;
+  }
+  if (ev.type === "route") {
+    return `<div class="ev-route">🔀 ${esc(SUBJECT_NAMES[ev.to] || ev.to)}接棒啦</div>`;
+  }
+  return "";
+}
 function msgEl(m) {
   const div = document.createElement("div");
   div.className = "msg " + (m.role === "user" ? "user" : "bot");
@@ -618,6 +659,7 @@ function msgEl(m) {
     ? '<img src="static/student.png" alt="" onerror="this.outerHTML=\'🧒\'">' : BOT_AVATAR;
   div.innerHTML = `<div class="avatar">${av}</div>
     <div class="bubble"><div class="who">${who}</div>
+    <div class="evbox">${(m.events || []).map(evHtml).join("")}</div>
     <div class="body">${m.role === "user" ? esc(m.text).replace(/\n/g, "<br>") : md(m.text)}</div></div>`;
   return div;
 }
@@ -654,7 +696,7 @@ async function send() {
 
   const list = getMsgs();
   list.push({ role: "user", text });
-  const botMsg = { role: "bot", text: "" };
+  const botMsg = { role: "bot", text: "", events: [] };
   list.push(botMsg);
   saveMsgs(list); renderMsgs();
 
@@ -662,7 +704,9 @@ async function send() {
   if (c && c.title === "新对话") { c.title = text.slice(0, 18); saveConvs(); renderConvList(); }
 
   const box = $("#msgs");
-  const bubble = box.lastElementChild.querySelector(".body");
+  const lastMsg = box.lastElementChild;
+  const bubble = lastMsg.querySelector(".body");
+  const evbox = lastMsg.querySelector(".evbox");
   bubble.classList.add("streaming", "cursor");
   box.scrollTop = box.scrollHeight;
 
@@ -672,8 +716,13 @@ async function send() {
     if (ev.data === "[DONE]") { finish(); return; }
     try {
       const d = JSON.parse(ev.data);
-      botMsg.text += d.delta || "";
-      bubble.innerHTML = md(botMsg.text);
+      if (d.type === "tool" || d.type === "wiki" || d.type === "route") {
+        botMsg.events.push(d);
+        evbox.insertAdjacentHTML("beforeend", evHtml(d));
+      } else {
+        botMsg.text += d.text || d.delta || "";
+        bubble.innerHTML = md(botMsg.text);
+      }
       box.scrollTop = box.scrollHeight;
     } catch (e) {}
   };
@@ -702,17 +751,29 @@ const MEM_CATS = [
 ];
 async function loadMemory() {
   const pg = $("#memoryPage");
-  pg.innerHTML = `<h2>🧠 学习记忆</h2><div class="desc">小博在聊天中自动记住的 4 类信息，越聊越懂你。</div>加载中…`;
+  pg.innerHTML = `<h2>🧠 学习记忆</h2><div class="desc">小博在聊天中自动记住的信息，越聊越懂你。</div>加载中…`;
   try {
-    const d = await api("api/memory");
-    pg.innerHTML = `<h2>🧠 学习记忆</h2><div class="desc">小博在聊天中自动记住的 4 类信息，越聊越懂你。</div>` +
+    const [d, mk, wk] = await Promise.all([api("api/memory"), api("api/mistakes"), api("api/words")]);
+    pg.innerHTML = `<h2>🧠 学习记忆</h2><div class="desc">小博在聊天中自动记住的信息，越聊越懂你。</div>` +
       `<div class="grid2">` + MEM_CATS.map(([cat, label]) => {
         const items = d.memory[cat] || [];
         return `<div class="card"><h3>${label} <span class="count">${items.length} 条</span></h3>` +
           (items.length ? items.map(e =>
             `<div class="kv"><div class="k">${esc(e.key)}</div><div class="v">${esc(e.content.length > 160 ? e.content.slice(0, 160) + "…" : e.content)}</div></div>`
           ).join("") : `<div class="empty">（暂无，多聊几次就会积累起来～）</div>`) + `</div>`;
-      }).join("") + `</div>`;
+      }).join("") + `</div>` +
+      `<div class="grid2">
+        <div class="card"><h3>📒 错题本 <span class="count">${mk.items.length} 题</span></h3>` +
+          (mk.items.length ? mk.items.slice(0, 20).map(i =>
+            `<div class="kv"><div class="k">${i.mastered ? "✅" : "📌"} #${i.id}</div><div class="v">${esc(i.question)}` +
+            (i.note ? `<br><span style="color:var(--text3);font-size:12px">易错点：${esc(i.note.length > 60 ? i.note.slice(0, 60) + "…" : i.note)}</span>` : "") +
+            `</div></div>`).join("")
+          : `<div class="empty">（暂无错题。做题错了，小博会主动问你要不要记～）</div>`) + `</div>
+        <div class="card"><h3>📝 生词本 <span class="count">${wk.items.length} 条</span></h3>` +
+          (wk.items.length ? wk.items.slice(0, 30).map(i =>
+            `<div class="kv"><div class="k">${i.mastered ? "✅" : "📌"} ${esc(i.word)}</div><div class="v">${esc(i.pinyin ? i.pinyin + " " : "")}${esc(i.meaning || "")}</div></div>`).join("")
+          : `<div class="empty">（暂无生词。遇到新词，小博会主动问你要不要收～）</div>`) + `</div>
+      </div>`;
   } catch (e) { pg.innerHTML = `<div class="card">加载失败：${esc(e.message)}</div>`; }
 }
 

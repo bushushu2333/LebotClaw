@@ -345,6 +345,8 @@ def create_default_registry(model_adapters=None, default_model=None, memory=None
     from lebotclaw.tools.builtin.knowledge import KnowledgeTool
     from lebotclaw.tools.builtin.dictionary import DictionaryTool
     from lebotclaw.tools.builtin.timer import TimerTool
+    from lebotclaw.tools.builtin.mistakebook import MistakeBookTool
+    from lebotclaw.tools.builtin.wordbank import WordBankTool
 
     registry = AgentRegistry()
     shared_memory = memory or MemoryStore()
@@ -365,6 +367,7 @@ def create_default_registry(model_adapters=None, default_model=None, memory=None
     math_tools = ToolRegistry()
     math_tools.register(CalculatorTool())
     math_tools.register(KnowledgeTool())
+    math_tools.register(MistakeBookTool())
     registry.register(Agent(name="math", system_prompt=_make_prompt(HEADSTemplate.math_prompt),
         tools=math_tools, model_adapter=default_adapter, memory=shared_memory, wiki=shared_wiki))
 
@@ -372,6 +375,7 @@ def create_default_registry(model_adapters=None, default_model=None, memory=None
     chinese_tools = ToolRegistry()
     chinese_tools.register(DictionaryTool())
     chinese_tools.register(KnowledgeTool())
+    chinese_tools.register(WordBankTool())
     registry.register(Agent(name="chinese", system_prompt=_make_prompt(HEADSTemplate.chinese_prompt),
         tools=chinese_tools, model_adapter=qwen_adapter, memory=shared_memory, wiki=shared_wiki))
 
@@ -379,6 +383,7 @@ def create_default_registry(model_adapters=None, default_model=None, memory=None
     science_tools = ToolRegistry()
     science_tools.register(KnowledgeTool())
     science_tools.register(TimerTool())
+    science_tools.register(MistakeBookTool())
     registry.register(Agent(name="science", system_prompt=_make_prompt(HEADSTemplate.science_prompt),
         tools=science_tools, model_adapter=default_adapter, memory=shared_memory, wiki=shared_wiki))
 
@@ -388,6 +393,8 @@ def create_default_registry(model_adapters=None, default_model=None, memory=None
     general_tools.register(DictionaryTool())
     general_tools.register(KnowledgeTool())
     general_tools.register(TimerTool())
+    general_tools.register(MistakeBookTool())
+    general_tools.register(WordBankTool())
     registry.register(Agent(name="general", system_prompt=_make_prompt(HEADSTemplate.general_prompt),
         tools=general_tools, model_adapter=default_adapter, memory=shared_memory, wiki=shared_wiki))
 

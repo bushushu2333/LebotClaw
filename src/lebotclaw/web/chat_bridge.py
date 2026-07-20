@@ -40,6 +40,26 @@ def blocking_stream_chat(ctx: SessionContext, user_input: str):
             yield chunk
 
 
+def blocking_stream_events(ctx: SessionContext, user_input: str):
+    """事件流版：命令/路由/工具/知识库全部以 dict 事件外露（SSE 用）。
+
+    事件类型：route（学科切换）→ wiki（知识库命中）→ tool（工具调用）→ delta（文本）。
+    整个流程在 ``ctx.lock`` 内串行化。
+    """
+    with ctx.lock:
+        cr = handle_command(user_input, ctx)
+        if cr.handled:
+            yield {"type": "delta", "text": cr.text}
+            return
+        before = ctx.active_name()
+        ctx.classify_and_route(user_input)
+        after = ctx.active_name()
+        if after != before:
+            yield {"type": "route", "from": before, "to": after}
+        for ev in ctx.active_agent.stream_events(user_input):
+            yield ev
+
+
 async def chat_and_emit(ctx: SessionContext, user_input: str) -> str:
     """NiceGUI async handler 调用入口。"""
     from nicegui import run

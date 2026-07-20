@@ -9,6 +9,26 @@ from lebotclaw.core.planner import Planner
 from lebotclaw.tools.base import Tool
 
 
+def _fmt_tool_input(raw_arguments) -> str:
+    """工具入参 → 前端卡片展示文本。{'expression': '3.14*2.5'} → '3.14*2.5'。"""
+    if isinstance(raw_arguments, str):
+        try:
+            raw_arguments = json.loads(raw_arguments)
+        except (json.JSONDecodeError, TypeError):
+            return raw_arguments[:120]
+    if isinstance(raw_arguments, dict):
+        return "，".join(str(v)[:60] for v in raw_arguments.values())[:120]
+    return str(raw_arguments)[:120]
+
+
+def _split(text: str, max_len: int = 24):
+    """按句切分文本（模拟流式用）。"""
+    import re
+    for piece in re.split(r"(?<=[。！？!?\n；;])", text or ""):
+        if piece:
+            yield piece
+
+
 class Agent:
 
     def __init__(
@@ -149,13 +169,6 @@ class Agent:
         相比 chat_stream（直接 stream、丢弃 tool_calls），本方法保证工具调用被执行，
         数学/知识库等场景不会算错。
         """
-        import re
-
-        def _split(text: str, max_len: int = 24):
-            for piece in re.split(r"(?<=[。！？!?\n；;])", text or ""):
-                if piece:
-                    yield piece
-
         if not user_input.strip():
             yield "请输入你的问题，我来帮你学习！"
             return
@@ -222,6 +235,111 @@ class Agent:
             self._history.append({"role": "assistant", "content": full})
             for piece in _split(full):
                 yield piece
+
+        self.memory.summarize_session(self._history)
+
+    def stream_events(self, user_input: str):
+        """事件流版对话：yield dict 事件，供 Web SSE 把"智能体动作"亮到前端。
+
+        多轮工具循环（≤3 轮，可连环调用）→ 真流式输出最终回答；纯新增不改旧行为。
+        事件类型：
+          {"type": "wiki", "pages": [title, ...]}              知识库命中
+          {"type": "tool", "name": ..., "input": ..., "output": ..., "success": bool}
+          {"type": "delta", "text": ...}                       文本片段
+        """
+        if not user_input.strip():
+            yield {"type": "delta", "text": "请输入你的问题，我来帮你学习！"}
+            return
+
+        # wiki 命中先外露为事件（_build_system_prompt_with_memory 里会再搜一次做注入，代价可忽略）
+        if self.wiki:
+            try:
+                hits = self.wiki.search_relevant(user_input, limit=3)
+                if hits:
+                    yield {"type": "wiki", "pages": [p.title for p in hits]}
+            except Exception:  # noqa: BLE001
+                pass
+
+        enriched_prompt = self._build_system_prompt_with_memory(user_input)
+        messages = [{"role": "system", "content": enriched_prompt}]
+        messages.extend(self._history)
+        messages.append({"role": "user", "content": user_input})
+        tool_schemas = self.tools.list_tools() if self.tools._tools else None
+
+        if self.model_adapter is None:
+            response_text = self._offline_respond(user_input, messages)
+            self._history.append({"role": "user", "content": user_input})
+            self._history.append({"role": "assistant", "content": response_text})
+            self.memory.summarize_session(self._history)
+            for piece in _split(response_text):
+                yield {"type": "delta", "text": piece}
+            return
+
+        # 工具循环（上限 3 轮防失控）：模型可连环调工具（先算再记→直到不再要工具）
+        user_msg = {"role": "user", "content": user_input}
+        self._history.append(user_msg)
+        resp = None
+        tool_rounds = 0
+        while tool_rounds < 3:
+            resp = self.model_adapter.generate(
+                messages=messages, tools=tool_schemas, temperature=0.7, max_tokens=4096)
+            if not resp.tool_calls:
+                break
+            tool_rounds += 1
+            asst_msg = {
+                "role": "assistant",
+                "content": resp.content or "",
+                "tool_calls": [
+                    {
+                        "id": tc.get("id", ""),
+                        "type": "function",
+                        "function": {
+                            "name": tc.get("tool_name", ""),
+                            "arguments": tc.get("arguments", "")
+                            if isinstance(tc.get("arguments"), str)
+                            else json.dumps(tc.get("arguments", {}), ensure_ascii=False),
+                        },
+                    }
+                    for tc in resp.tool_calls
+                ],
+            }
+            self._history.append(asst_msg)
+            messages.append(asst_msg)
+            args_by_id = {tc.get("id", ""): tc.get("arguments", "") for tc in resp.tool_calls}
+            for tr in self._handle_tool_calls(resp.tool_calls):
+                tool_msg = {
+                    "role": "tool",
+                    "tool_call_id": tr.get("tool_call_id", ""),
+                    "content": tr.get("output", ""),
+                }
+                messages.append(tool_msg)
+                self._history.append(tool_msg)
+                yield {
+                    "type": "tool",
+                    "name": tr.get("tool_name", ""),
+                    "input": _fmt_tool_input(args_by_id.get(tr.get("tool_call_id", ""), "")),
+                    "output": (tr.get("output", "") or "")[:200],
+                    "success": bool(tr.get("success", True)),
+                }
+
+        if resp is not None and resp.tool_calls:
+            # 达到轮次上限仍要工具：不带工具兜底生成一次，保证有回答
+            resp = self.model_adapter.generate(
+                messages=messages, tools=None, temperature=0.7, max_tokens=4096)
+
+        if tool_rounds == 0 and resp is not None:
+            # 无工具：resp 已是完整回复，按句切分模拟流式
+            for piece in _split(resp.content or ""):
+                yield {"type": "delta", "text": piece}
+            self._history.append({"role": "assistant", "content": resp.content or ""})
+        else:
+            # 工具轮结束：真流式输出最终回答
+            collected = []
+            for chunk in self.model_adapter.stream(
+                    messages=messages, tools=tool_schemas, temperature=0.7, max_tokens=4096):
+                collected.append(chunk)
+                yield {"type": "delta", "text": chunk}
+            self._history.append({"role": "assistant", "content": "".join(collected)})
 
         self.memory.summarize_session(self._history)
 

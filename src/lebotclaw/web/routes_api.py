@@ -8,7 +8,7 @@ from fastapi import Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from nicegui import app
 
-from lebotclaw.web.chat_bridge import api_chat, blocking_stream_chat
+from lebotclaw.web.chat_bridge import api_chat, blocking_stream_chat, blocking_stream_events
 
 # 可切换的模型（设置页卡片）
 ARKCODING_MODELS = [
@@ -77,15 +77,15 @@ def register_api_routes(runtime):
 
     @app.get("/api/chat/stream")
     async def chat_stream(message: str, session_id: str = "api-stream"):
-        """SSE 流式：chat_stream_with_tools 逐 chunk 输出（保留工具调用）。
+        """SSE 事件流：route/wiki/tool/delta 事件逐条下发（保留工具调用并外露）。
 
         同步 generator 由 Starlette 在 threadpool 迭代，不阻塞事件循环。
         """
         ctx = runtime.sessions.get_or_create(session_id, channel="web")
 
         def gen():
-            for chunk in blocking_stream_chat(ctx, message):
-                yield f"data: {json.dumps({'delta': chunk}, ensure_ascii=False)}\n\n"
+            for ev in blocking_stream_events(ctx, message):
+                yield f"data: {json.dumps(ev, ensure_ascii=False)}\n\n"
             yield "data: [DONE]\n\n"
 
         return StreamingResponse(
@@ -183,6 +183,22 @@ def register_api_routes(runtime):
                 for c in cats
             }
         return {"memory": await run.io_bound(_load)}
+
+    @app.get("/api/mistakes")
+    async def mistakes_list():
+        """错题本列表（记忆页页签用），未掌握在前。"""
+        from lebotclaw.tools.builtin.store import JsonListStore
+        items = JsonListStore("~/.lebotclaw/mistakes.json").all()
+        items.sort(key=lambda i: (i.get("mastered", False), -i.get("created_at", 0)))
+        return {"items": items}
+
+    @app.get("/api/words")
+    async def words_list():
+        """生词本列表（记忆页页签用），未掌握在前。"""
+        from lebotclaw.tools.builtin.store import JsonListStore
+        items = JsonListStore("~/.lebotclaw/wordbank.json").all()
+        items.sort(key=lambda i: (i.get("mastered", False), -i.get("created_at", 0)))
+        return {"items": items}
 
     @app.get("/api/wiki")
     async def wiki_list():
