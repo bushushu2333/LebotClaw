@@ -261,6 +261,18 @@ def register_api_routes(runtime):
             return JSONResponse({"error": "not found"}, status_code=404)
         return r
 
+    @app.post("/api/chat/photo")
+    async def chat_photo(request: Request):
+        """拍照讲题：图片走 seed-2-1-pro 视觉模型（io_bound 不阻塞事件循环）。"""
+        from nicegui import run
+        from lebotclaw.web.chat_bridge import blocking_photo_chat
+        payload = await request.json()
+        image = payload.get("image", "")
+        if not image.startswith("data:image"):
+            return JSONResponse({"error": "需要图片"}, status_code=400)
+        reply = await run.io_bound(blocking_photo_chat, image, payload.get("text", ""))
+        return {"reply": reply}
+
     @app.get("/api/proactive")
     async def proactive(consume: bool = False):
         """小博主动来信：晨间问候/错题间隔重复/生日。consume=1 时标记已发。"""

@@ -66,6 +66,43 @@ async def chat_and_emit(ctx: SessionContext, user_input: str) -> str:
     return await run.io_bound(blocking_chat, ctx, user_input)
 
 
+# ── 拍照讲题（多模态）──────────────────────────────────────
+# 视觉走 seed-2-1-pro（同一 key，实测 coding 端点只有它支持图像输入）
+
+_PHOTO_RULE = """
+
+【拍照讲题】他会拍作业/试卷的照片给你。先认出题目和他的作答：
+- 全对：具体夸到点上（哪一步做得好），别泛泛说"真棒"
+- 有错：指出错在哪一步、为什么错，然后用提问引导他自己改对，绝不直接报答案
+- 看不清的地方老实说看不清，让他重拍一张，别瞎猜"""
+
+_vision_adapter = None
+
+
+def _get_vision_adapter():
+    global _vision_adapter
+    if _vision_adapter is None:
+        from lebotclaw.adapters.arkcoding import ArkCodingAdapter
+        _vision_adapter = ArkCodingAdapter(model="seed-2-1-pro")
+    return _vision_adapter
+
+
+def blocking_photo_chat(image_data_url: str, text: str) -> str:
+    """拍照讲题（线程池执行）：视觉模型 + 小博人设 + 不给答案规矩。"""
+    from lebotclaw.education.heads import HEADSTemplate
+    system = HEADSTemplate.general_prompt() + _PHOTO_RULE
+    content = [
+        {"type": "text", "text": (text or "").strip() or "这是我拍的作业，帮我看看"},
+        {"type": "image_url", "image_url": {"url": image_data_url}},
+    ]
+    resp = _get_vision_adapter().generate(
+        messages=[{"role": "system", "content": system},
+                  {"role": "user", "content": content}],
+        max_tokens=4096,
+    )
+    return resp.content or "这张照片我没太看清，能再拍清楚一点的吗？"
+
+
 async def api_chat(ctx: SessionContext, user_input: str) -> str:
     """FastAPI /api/chat 路由调用入口（同样走 io_bound，不阻塞事件循环）。"""
     from nicegui import run
