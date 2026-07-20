@@ -11,6 +11,8 @@ _CONFIG_FILE = _CONFIG_DIR / "config.json"
 
 # 国内 AI 模型列表
 _MODEL_OPTIONS = [
+    {"name": "arkcoding", "adapter_class": "lebotclaw.adapters.arkcoding.ArkCodingAdapter",
+     "env_key": "ARK_CODING_API_KEY", "label": "火山 Coding 套餐（多模型）", "desc": "一个 key 调 deepseek-v4-pro/glm-5.2/seed-2-1-pro/kimi-k2-7，ARK_CODING_MODEL 切换"},
     {"name": "deepseek", "adapter_class": "lebotclaw.adapters.deepseek.DeepSeekAdapter",
      "env_key": "DEEPSEEK_API_KEY", "label": "DeepSeek（深度求索）", "desc": "聪明实惠，推荐先用这个"},
     {"name": "qwen", "adapter_class": "lebotclaw.adapters.qwen.QwenAdapter",
@@ -76,6 +78,10 @@ def _create_adapter(model_config, api_key=None):
         endpoint = os.environ.get(env_key, "")
         if endpoint:
             kwargs["endpoint_id"] = endpoint
+    if model_config["name"] == "arkcoding":
+        model = os.environ.get("ARK_CODING_MODEL", "")
+        if model:
+            kwargs["model"] = model
     return cls(**kwargs)
 
 
