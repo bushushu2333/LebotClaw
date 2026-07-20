@@ -812,7 +812,13 @@ async function loadJobs() {
 async function loadSettings() {
   const pg = $("#settingsPage");
   try {
-    const p = await api("api/profile");
+    const [p, m] = await Promise.all([api("api/profile"), api("api/models")]);
+    const groups = {};
+    m.options.forEach(o => { (groups[o.group] = groups[o.group] || []).push(o); });
+    const optsHtml = Object.entries(groups).map(([g, os]) =>
+      `<optgroup label="${esc(g)}">` + os.map(o =>
+        `<option value="${esc(o.id)}"${o.id === m.current ? " selected" : ""}>${esc(o.label)}${esc(o.note || "")}</option>`
+      ).join("") + `</optgroup>`).join("");
     pg.innerHTML = `<h2>⚙️ 设置</h2><div class="desc">学生信息会被小博记住，用于因材施教。</div>
       <div class="grid2">
       <div class="card"><h3>学生信息</h3>
@@ -820,10 +826,12 @@ async function loadSettings() {
         <label class="f">年级</label><input type="text" id="sGrade" value="${esc(p.grade)}" placeholder="如：四年级">
         <button class="btn" id="sSave">保存</button>
       </div>
-      <div class="card"><h3>AI 大脑</h3>
-        <div class="kv"><div class="k">当前模型</div><div class="v">${p.has_model ? "✅ " + esc(p.default_model) : "⚠ 未配置（终端跑 lebotclaw setup）"}</div></div>
-        <div class="kv"><div class="k">可用模型</div><div class="v">${esc(p.available_models.join("、") || "无")}</div></div>
-        <div class="kv"><div class="k">对话风格</div><div class="v">${esc(p.style)}</div></div>
+      <div class="card"><h3>AI 大脑 🧠</h3>
+        <label class="f">当前模型</label>
+        <select id="sModel" style="width:100%;padding:10px 12px;border-radius:12px;border:2px solid var(--line);background:var(--card);color:var(--ink);font-size:14px;margin-bottom:10px">${optsHtml}</select>
+        <button class="btn" id="sModelSave">切换模型</button>
+        <div class="desc" style="margin-top:10px">火山 Coding 套餐一个 key 四个模型，切换立即生效，不用重启。</div>
+        <div class="kv" style="margin-top:12px"><div class="k">对话风格</div><div class="v">${esc(p.style)}</div></div>
         <div class="kv"><div class="k">数据目录</div><div class="v" style="font-family:var(--mono);font-size:12px">~/.lebotclaw/</div></div>
       </div></div>
       <div class="card"><h3>学生画像（小博记住的你）</h3>${
@@ -837,6 +845,12 @@ async function loadSettings() {
         if (nm) { studentName = nm; localStorage.setItem("lc_name", nm); }
         toast("已保存 ✓"); refreshStatus();
       } catch (e) { toast("保存失败：" + e.message); }
+    };
+    $("#sModelSave").onclick = async () => {
+      try {
+        const r = await api("api/models/select", { method: "POST", body: { id: $("#sModel").value } });
+        toast("已切换到 " + r.label + " 🧠"); refreshStatus();
+      } catch (e) { toast("切换失败：" + e.message); }
     };
   } catch (e) { pg.innerHTML = `<div class="card">加载失败：${esc(e.message)}</div>`; }
 }
