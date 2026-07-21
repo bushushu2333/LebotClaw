@@ -149,6 +149,12 @@ main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
   border-radius: 999px; padding: 5px 14px; font-size: 12.5px; font-weight: 600; cursor: pointer;
   transition: all .15s;
 }
+#sbToggle {
+  border: 1.5px solid var(--border2); background: var(--panel); color: var(--text2);
+  border-radius: 10px; width: 34px; height: 34px; font-size: 15px; cursor: pointer;
+  flex-shrink: 0; transition: all .15s;
+}
+#sbToggle:hover { color: var(--accent2); border-color: var(--accent); }
 #themeBtn:hover { color: var(--accent2); border-color: var(--accent); transform: scale(1.05); }
 .view { flex: 1; overflow-y: auto; min-height: 0; }
 .hidden { display: none !important; }
@@ -506,6 +512,17 @@ label.f { display: block; font-size: 12.5px; font-weight: 700; color: var(--text
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 @media (max-width: 900px) { .grid2 { grid-template-columns: 1fr; } #convList { display: none; } }
 
+/* ── 两栏折叠（左侧栏 + 会话列表，收起来只剩对话框）── */
+body.hide-sidebar #sidebar { display: none; }
+body.hide-convlist #convList { display: none; }
+#view-chat { position: relative; }
+#clFab {
+  position: absolute; left: 10px; top: 10px; z-index: 20;
+  width: 34px; height: 34px; border-radius: 50%;
+  background: var(--panel); border: 1.5px solid var(--border2);
+  cursor: pointer; font-size: 15px; box-shadow: 0 2px 8px rgba(0,0,0,.1);
+}
+@media (max-width: 900px) { #clFab { display: none !important; } }
 /* ── Agent 工作过程条：让"小博在干活"全程可见 ── */
 .stage {
   display: flex; align-items: center; gap: 7px; width: fit-content;
@@ -555,6 +572,7 @@ label.f { display: block; font-size: 12.5px; font-weight: 700; color: var(--text
 
   <main>
     <div id="topbar">
+      <button id="sbToggle" title="收起侧栏">☰</button>
       <span id="crumb">对话</span>
       <span id="modelBadge">…</span>
       <button id="profileBtn" title="我的身份">👤</button>
@@ -564,9 +582,13 @@ label.f { display: block; font-size: 12.5px; font-weight: 700; color: var(--text
     <!-- 对话 -->
     <section id="view-chat" class="view">
       <div id="convList">
-        <div class="hd"><button class="btn" style="width:100%;margin:0" id="newConv">＋ 新对话</button></div>
+        <div class="hd" style="display:flex;gap:6px;align-items:center">
+          <button class="btn" style="flex:1;margin:0" id="newConv">＋ 新对话</button>
+          <button id="clToggle" title="收起对话列表" style="flex-shrink:0;width:34px;height:34px;border-radius:10px;border:1.5px solid var(--border2);background:var(--panel);cursor:pointer;font-size:14px;color:var(--text3)">⇤</button>
+        </div>
         <div class="items" id="convItems"></div>
       </div>
+      <button id="clFab" class="hidden" title="打开对话列表">💬</button>
       <div id="chatCol">
         <div id="subjectBar"></div>
         <div id="msgs"></div>
@@ -1488,6 +1510,24 @@ async function checkProactive() {
   } catch (e) {}
 }
 setInterval(checkProactive, 5 * 60 * 1000);
+
+/* ───────── 两栏折叠（收起来只剩对话框）───────── */
+function applyCollapse() {
+  const hideSb = localStorage.getItem("lc_hide_sidebar") === "1";
+  const hideCl = localStorage.getItem("lc_hide_convs") === "1";
+  document.body.classList.toggle("hide-sidebar", hideSb);
+  document.body.classList.toggle("hide-convlist", hideCl);
+  $("#clFab").classList.toggle("hidden", !hideCl);
+  $("#sbToggle").textContent = hideSb ? "☰" : "☰";
+  $("#sbToggle").title = hideSb ? "展开侧栏" : "收起侧栏";
+}
+$("#sbToggle").onclick = () => {
+  localStorage.setItem("lc_hide_sidebar", document.body.classList.contains("hide-sidebar") ? "0" : "1");
+  applyCollapse();
+};
+$("#clToggle").onclick = () => { localStorage.setItem("lc_hide_convs", "1"); applyCollapse(); };
+$("#clFab").onclick = () => { localStorage.setItem("lc_hide_convs", "0"); applyCollapse(); };
+applyCollapse();
 
 /* ───────── 启动 ───────── */
 if (!curUid) {                     // 第一次来：先建好专属空间，再见面认识
