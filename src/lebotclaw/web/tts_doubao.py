@@ -20,7 +20,9 @@ from lebotclaw.web import tts_protocols as proto
 
 _API_KEY = os.environ.get("DOUBAO_TTS_API_KEY", "")
 _RESOURCE_ID = "seed-tts-2.0"
-_SPEAKER = "ICL_uranus_zh_female_jiaxiaozi_tob"
+# 音色/音调可用环境变量覆盖（换音色不用改代码）：DOUBAO_TTS_SPEAKER / DOUBAO_TTS_PITCH
+_SPEAKER = os.environ.get("DOUBAO_TTS_SPEAKER", "ICL_uranus_zh_female_jiaxiaozi_tob")
+_PITCH = int(os.environ.get("DOUBAO_TTS_PITCH", "0"))  # [-12,12]，负数压更低沉，仅 ICL/mix 音色有效
 _URL = "wss://openspeech.bytedance.com/api/v3/tts/bidirection"
 
 # websockets 12.x 用 extra_headers，13.0+ 改名 additional_headers（服务器是 15.x）
@@ -66,12 +68,15 @@ async def synth(text: str, timeout: float = 25.0) -> bytes:
             raise RuntimeError("doubao tts: connection failed")
 
         # ② StartSession（req_params 带 speaker + audio_params，不带 text）
+        audio_params = {"format": "mp3", "sample_rate": 24000}
+        if _PITCH:
+            audio_params["pitch_rate"] = _PITCH
         payload = json.dumps({
             "user": {"uid": session_id},
             "namespace": "BidirectionalTTS",
             "req_params": {
                 "speaker": _SPEAKER,
-                "audio_params": {"format": "mp3", "sample_rate": 24000},
+                "audio_params": audio_params,
             },
         }).encode()
         await proto.start_session(ws, payload, session_id)
