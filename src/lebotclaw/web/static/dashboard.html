@@ -989,7 +989,21 @@ async function send() {
     sending = false; $("#sendBtn").disabled = false;
     syncSubject(); refreshStatus();
     $("#inp").focus();
+    maybeTitle();
   }
+}
+async function maybeTitle() {
+  // 聊满3轮后，请超级小博用5-9字总结这次对话作为标题（对齐 ChatGPT）
+  const c = curConv();
+  if (!c || c.titled) return;
+  if (getMsgs().filter(m => m.role === "user").length < 3) return;
+  c.titled = true; saveConvs();                       // 先占位，避免重复触发
+  try {
+    const msgs = getMsgs().slice(-8).map(m => ({ role: m.role, content: m.text }));
+    const r = await api("api/session/title", { method: "POST", body: { messages: msgs } });
+    if (r && r.title) { c.title = r.title; saveConvs(); renderConvList(); }
+    else { c.titled = false; saveConvs(); }
+  } catch (e) { c.titled = false; saveConvs(); }
 }
 $("#sendBtn").onclick = send;
 

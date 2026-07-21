@@ -29,6 +29,26 @@ def _tts_bytes(text: str) -> bytes:
     return buf.getvalue()
 
 
+def _gen_title(adapter, messages):
+    """LLM 给对话起 5-9 字标题（会话列表用，对齐 ChatGPT 逻辑）。"""
+    import re
+    convo = "\n".join(
+        f"{'学生' if m.get('role') == 'user' else '超级小博'}：{(m.get('content') or '')[:150]}"
+        for m in (messages or [])[:6] if m.get("content")
+    )
+    if not convo.strip():
+        return None
+    prompt = (
+        "请用5到9个汉字给下面这段学习对话起一个简短标题，"
+        "概括这次聊的主题（如\"分数加减法\"\"光合作用\"\"唐朝诗人\"\"英语现在时\"）。"
+        "只输出标题本身，不要标点、不要引号、不要任何多余的话：\n\n" + convo
+    )
+    resp = adapter.generate(messages=[{"role": "user", "content": prompt}],
+                            max_tokens=512, temperature=0.3)
+    t = re.sub(r"[^一-龥A-Za-z0-9]+", "", resp.content or "")
+    return t[:9] or None
+
+
 # 可切换的模型（设置页卡片）
 ARKCODING_MODELS = [
     ("deepseek-v4-pro", "DeepSeek V4 Pro", "最强大脑 · 想得深", "🧠"),
@@ -412,3 +432,17 @@ def register_api_routes(runtime):
             except KeyError:
                 return JSONResponse({"error": f"unknown subject {subject}"}, status_code=400)
         return {"active_subject": subject}
+
+    @app.post("/api/session/title")
+    async def session_title(request: Request):
+        """对话满3轮后，LLM 用5-9字总结这次对话作为会话标题（对齐 ChatGPT）。"""
+        from nicegui import run
+        payload = await request.json()
+        messages = payload.get("messages") or []
+        if len([m for m in messages if m.get("role") == "user"]) < 3:
+            return {"title": None}
+        adapter = runtime.model_adapters.get(runtime.default_model)
+        if adapter is None:
+            return JSONResponse({"error": "no model"}, status_code=503)
+        title = await run.io_bound(_gen_title, adapter, messages)
+        return {"title": title}
