@@ -27,7 +27,7 @@ def _default_config() -> dict:
         },
         "channels": {
             "feishu": {
-                "enabled": False, "app_id": "", "app_secret": "", "bot_name": "小博",
+                "enabled": False, "app_id": "", "app_secret": "", "bot_name": "超级小博",
                 "default_chat_id": "", "stream_card": False,
                 "stream_throttle_ms": 800, "stream_min_delta_chars": 20,
             },

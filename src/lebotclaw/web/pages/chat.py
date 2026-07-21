@@ -79,7 +79,7 @@ def register(runtime):
                     .props("autogrow outlined").classes("flex-grow")
                 send_btn = ui.button(icon="send", color="primary")
 
-            bot_name = runtime.config.get("channels", {}).get("feishu", {}).get("bot_name", "小博")
+            bot_name = runtime.config.get("channels", {}).get("feishu", {}).get("bot_name", "超级小博")
 
             async def send():
                 text = (inp.value or "").strip()

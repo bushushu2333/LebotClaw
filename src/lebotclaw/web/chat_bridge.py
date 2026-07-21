@@ -88,7 +88,7 @@ def _get_vision_adapter():
 
 
 def blocking_photo_chat(image_data_url: str, text: str) -> str:
-    """拍照讲题（线程池执行）：视觉模型 + 小博人设 + 不给答案规矩。"""
+    """拍照讲题（线程池执行）：视觉模型 + 超级小博人设 + 不给答案规矩。"""
     from lebotclaw.education.heads import HEADSTemplate
     system = HEADSTemplate.general_prompt() + _PHOTO_RULE
     content = [

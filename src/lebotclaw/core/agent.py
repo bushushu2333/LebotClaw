@@ -38,7 +38,7 @@ _FESTIVALS = {
 
 
 def _time_context(memory) -> str:
-    """当前时间情境注入：让小博的问候和话题有'生活感'。"""
+    """当前时间情境注入：让超级小博的问候和话题有'生活感'。"""
     from datetime import datetime
     now = datetime.now()
     hour = now.hour
