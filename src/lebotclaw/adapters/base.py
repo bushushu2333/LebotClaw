@@ -51,6 +51,26 @@ class ModelAdapter(ABC):
     ) -> Generator[str, None, None]:
         ...
 
+    def stream_deltas(
+        self,
+        messages: list[dict],
+        tools: list[dict] = None,
+        temperature: float = 0.7,
+        max_tokens: int = 4096,
+    ) -> Generator[tuple, None, None]:
+        """流式事件流：yield ('text', str) 多次；模型要求工具时末尾 yield ('tool_calls', list)。
+
+        默认兜底实现：generate() 一次性拿完整回复后按小段伪流式吐（非真流式）。
+        子类应覆盖为真流式逐 token。tool_calls 元素格式同 generate()：{id, tool_name, arguments}。
+        """
+        resp = self.generate(messages=messages, tools=tools, temperature=temperature, max_tokens=max_tokens)
+        if resp.content:
+            buf, step = resp.content, 24
+            for i in range(0, len(buf), step):
+                yield ("text", buf[i:i + step])
+        if resp.tool_calls:
+            yield ("tool_calls", resp.tool_calls)
+
     def health_check(self) -> bool:
         try:
             resp = self.generate(

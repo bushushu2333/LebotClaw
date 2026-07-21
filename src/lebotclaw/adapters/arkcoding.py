@@ -114,3 +114,59 @@ class ArkCodingAdapter(ModelAdapter):
                 provider="arkcoding",
                 status_code=e.status_code,
             )
+
+    def stream_deltas(
+        self,
+        messages: list[dict],
+        tools: list[dict] = None,
+        temperature: float = 0.7,
+        max_tokens: int = 4096,
+    ) -> Generator[tuple, None, None]:
+        """真流式：逐 token yield ('text', str)；模型要求工具时末尾 yield ('tool_calls', list)。
+
+        流式解析 tool_calls（按 index 累积分片的 function.name / arguments）。
+        tool_calls 元素格式同 generate()：{id, tool_name, arguments(str)}。
+        """
+        try:
+            kwargs = {
+                "model": self.model,
+                "messages": messages,
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+                "stream": True,
+            }
+            if tools:
+                kwargs["tools"] = tools
+                kwargs["tool_choice"] = "auto"
+            response = self.client.chat.completions.create(**kwargs)
+            tc_acc: dict = {}
+            for chunk in response:
+                if not chunk.choices:
+                    continue
+                delta = chunk.choices[0].delta
+                if delta and delta.content:
+                    yield ("text", delta.content)
+                tcs = getattr(delta, "tool_calls", None) if delta else None
+                if tcs:
+                    for tc in tcs:
+                        idx = tc.index if tc.index is not None else 0
+                        slot = tc_acc.setdefault(idx, {"id": "", "tool_name": "", "arguments": ""})
+                        if tc.id:
+                            slot["id"] = tc.id
+                        if tc.function:
+                            if tc.function.name:
+                                slot["tool_name"] += tc.function.name
+                            if tc.function.arguments:
+                                slot["arguments"] += tc.function.arguments
+            if tc_acc:
+                yield ("tool_calls", [tc_acc[i] for i in sorted(tc_acc)])
+        except APITimeoutError as e:
+            raise ModelAdapterError(f"ArkCoding stream timeout: {e}", provider="arkcoding")
+        except APIConnectionError as e:
+            raise ModelAdapterError(f"ArkCoding stream connection error: {e}", provider="arkcoding")
+        except APIError as e:
+            raise ModelAdapterError(
+                f"ArkCoding stream API error: {e}",
+                provider="arkcoding",
+                status_code=e.status_code,
+            )

@@ -332,20 +332,31 @@ class Agent:
                 yield {"type": "delta", "text": piece}
             return
 
-        # 工具循环（上限 3 轮防失控）：模型可连环调工具（先算再记→直到不再要工具）
+        # 真流式工具循环（上限 3 轮）：每轮边吐 token 边探测工具，普通对话一次到位
         user_msg = {"role": "user", "content": user_input}
         self._history.append(user_msg)
-        resp = None
         tool_rounds = 0
+        got_final = False
         while tool_rounds < 3:
-            resp = self.model_adapter.generate(
-                messages=messages, tools=tool_schemas, temperature=0.7, max_tokens=4096)
-            if not resp.tool_calls:
+            collected = []
+            pending_tools = []
+            for kind, data in self.model_adapter.stream_deltas(
+                    messages=messages, tools=tool_schemas, temperature=0.7, max_tokens=4096):
+                if kind == "text":
+                    collected.append(data)
+                    yield {"type": "delta", "text": data}
+                elif kind == "tool_calls":
+                    pending_tools = data
+            if not pending_tools:
+                # 模型给出最终文本（已真流式输出），收工
+                self._history.append({"role": "assistant", "content": "".join(collected)})
+                got_final = True
                 break
+            # 模型要求工具：记录 assistant 的 tool_calls 并执行
             tool_rounds += 1
             asst_msg = {
                 "role": "assistant",
-                "content": resp.content or "",
+                "content": "".join(collected) or "",
                 "tool_calls": [
                     {
                         "id": tc.get("id", ""),
@@ -357,13 +368,13 @@ class Agent:
                             else json.dumps(tc.get("arguments", {}), ensure_ascii=False),
                         },
                     }
-                    for tc in resp.tool_calls
+                    for tc in pending_tools
                 ],
             }
             self._history.append(asst_msg)
             messages.append(asst_msg)
-            args_by_id = {tc.get("id", ""): tc.get("arguments", "") for tc in resp.tool_calls}
-            for tr in self._handle_tool_calls(resp.tool_calls):
+            args_by_id = {tc.get("id", ""): tc.get("arguments", "") for tc in pending_tools}
+            for tr in self._handle_tool_calls(pending_tools):
                 tool_msg = {
                     "role": "tool",
                     "tool_call_id": tr.get("tool_call_id", ""),
@@ -379,23 +390,14 @@ class Agent:
                     "success": bool(tr.get("success", True)),
                 }
 
-        if resp is not None and resp.tool_calls:
-            # 达到轮次上限仍要工具：不带工具兜底生成一次，保证有回答
-            resp = self.model_adapter.generate(
-                messages=messages, tools=None, temperature=0.7, max_tokens=4096)
-
-        if tool_rounds == 0 and resp is not None:
-            # 无工具：resp 已是完整回复，按句切分模拟流式
-            for piece in _split(resp.content or ""):
-                yield {"type": "delta", "text": piece}
-            self._history.append({"role": "assistant", "content": resp.content or ""})
-        else:
-            # 工具轮结束：真流式输出最终回答
+        # 达到工具轮上限仍未收敛：不带工具兜底，真流式补一次最终回答
+        if not got_final:
             collected = []
-            for chunk in self.model_adapter.stream(
-                    messages=messages, tools=tool_schemas, temperature=0.7, max_tokens=4096):
-                collected.append(chunk)
-                yield {"type": "delta", "text": chunk}
+            for kind, data in self.model_adapter.stream_deltas(
+                    messages=messages, tools=None, temperature=0.7, max_tokens=4096):
+                if kind == "text":
+                    collected.append(data)
+                    yield {"type": "delta", "text": data}
             self._history.append({"role": "assistant", "content": "".join(collected)})
 
         self.memory.summarize_session(self._history)
