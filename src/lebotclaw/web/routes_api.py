@@ -11,23 +11,31 @@ from nicegui import app
 
 from lebotclaw.web.chat_bridge import api_chat, blocking_stream_chat, blocking_stream_events
 
+def _clean_tts_text(text: str) -> str:
+    """去掉 markdown 符号/链接，纯文本才喂给 TTS。"""
+    import re
+    return re.sub(r"[*#`>\[\]()_~]|https?://\S+", "", text).strip() or "嗯"
+
+
 def _tts_bytes(text: str) -> bytes:
-    """edge-tts 生成 mp3。小博是 15 岁男孩 → 云希少年音。去掉 markdown 符号。"""
+    """edge-tts 生成 mp3（fallback：豆包未配 key 或合成失败时用）。云希少年音。"""
     import asyncio
     import io
-    import re
     import edge_tts
 
-    clean = re.sub(r"[*#`>\[\]()_~]|https?://\S+", "", text).strip() or "嗯"
     buf = io.BytesIO()
 
     async def _go():
-        async for chunk in edge_tts.Communicate(clean, "zh-CN-YunxiNeural").stream():
+        async for chunk in edge_tts.Communicate(_clean_tts_text(text), "zh-CN-YunxiNeural").stream():
             if chunk["type"] == "audio":
                 buf.write(chunk["data"])
 
     asyncio.run(_go())
     return buf.getvalue()
+
+
+# TTS 结果小缓存：同一段文本重复点🔊不必再合成（FIFO，64 条封顶）
+_TTS_CACHE: dict = {}
 
 
 def _gen_title(adapter, messages):
@@ -315,10 +323,28 @@ def register_api_routes(runtime):
 
     @app.get("/api/tts")
     async def tts(text: str):
-        """小博开口说话：edge-tts 少年音 mp3（io_bound 生成）。"""
-        from nicegui import run
+        """小博开口说话：优先豆包假小子 2.0（配了 DOUBAO_TTS_API_KEY 时），失败回退 edge-tts。"""
+        import asyncio
+
         from fastapi.responses import Response
-        audio = await run.io_bound(_tts_bytes, text[:300])
+
+        clean = _clean_tts_text(text[:300])
+        if clean in _TTS_CACHE:
+            audio = _TTS_CACHE[clean]
+        else:
+            audio = None
+            from lebotclaw.web import tts_doubao
+            if tts_doubao.available():
+                try:
+                    audio = await asyncio.wait_for(tts_doubao.synth(clean), timeout=30)
+                except Exception as e:
+                    print(f"⚠ 豆包 TTS 失败，回退 edge-tts：{e}")
+            if not audio:
+                from nicegui import run
+                audio = await run.io_bound(_tts_bytes, clean)
+            if len(_TTS_CACHE) >= 64:
+                _TTS_CACHE.pop(next(iter(_TTS_CACHE)))
+            _TTS_CACHE[clean] = audio
         return Response(content=audio, media_type="audio/mpeg",
                         headers={"Cache-Control": "max-age=3600"})
 

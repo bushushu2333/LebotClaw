@@ -505,12 +505,33 @@ label.f { display: block; font-size: 12.5px; font-weight: 700; color: var(--text
 .ob-card .btn { width: 100%; margin-top: 6px; padding: 12px; font-size: 15px; }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 @media (max-width: 900px) { .grid2 { grid-template-columns: 1fr; } #convList { display: none; } }
+
+/* ── Agent 工作过程条：让"小博在干活"全程可见 ── */
+.stage {
+  display: flex; align-items: center; gap: 7px; width: fit-content;
+  font-size: 12.5px; font-weight: 600; color: var(--accent2);
+  background: var(--panel2); border: 1.5px solid var(--border2);
+  border-radius: 999px; padding: 5px 13px; margin: 2px 0 6px;
+}
+.stage .st-ico { animation: stPulse 1.1s ease-in-out infinite; display: inline-block; }
+@keyframes stPulse { 0%,100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.25); opacity: .75; } }
+.stage .dots::after { content: ""; animation: stDots 1.2s steps(4) infinite; }
+@keyframes stDots { 0% { content: ""; } 25% { content: "·"; } 50% { content: "··"; } 75% { content: "···"; } }
+.stage.done { color: var(--text3); border-style: dashed; font-weight: 500; }
+.stage.done .st-ico { animation: none; }
+.stage.done .dots { display: none; }
+/* 身份卡片（顶栏👤点开） */
+.id-who { display: flex; align-items: center; gap: 12px; margin: 6px 0 14px; }
+.id-who .iw-em { font-size: 34px; }
+.id-who .iw-name { font-size: 17px; font-weight: 800; }
+.id-who .iw-sub { font-size: 12px; color: var(--text3); }
+.id-actions { display: flex; flex-direction: column; gap: 8px; }
 </style>
 </head>
 <body>
 <div id="app">
   <aside id="sidebar">
-    <div class="brand">
+    <div class="brand" id="brandBox" title="超级小博">
       <img class="paw" src="static/avatar.png" alt="超级小博">
       <div><div class="name">LebotClaw</div><div class="sub">超级小博 · 学习伙伴控制台</div></div>
     </div>
@@ -536,7 +557,7 @@ label.f { display: block; font-size: 12.5px; font-weight: 700; color: var(--text
     <div id="topbar">
       <span id="crumb">对话</span>
       <span id="modelBadge">…</span>
-      <button id="profileBtn" title="切换角色">👤</button>
+      <button id="profileBtn" title="我的身份">👤</button>
       <button id="themeBtn" title="切换主题">🌞 白天</button>
     </div>
 
@@ -578,13 +599,9 @@ label.f { display: block; font-size: 12.5px; font-weight: 700; color: var(--text
   </main>
 </div>
 
-<!-- 角色选择（多档案，记忆隔离） -->
+<!-- 身份卡片 / 内部角色入口（内容由 JS 渲染） -->
 <div id="profilePicker" class="hidden">
-  <div class="ob-card">
-    <h2>选个角色进入</h2>
-    <p style="color:var(--text3);font-size:13px">每位伙伴有自己独立的记忆空间，互不串～</p>
-    <div class="profile-grid" id="profileGrid"></div>
-  </div>
+  <div class="ob-card" id="profileCard"></div>
 </div>
 
 <!-- 首次见面：称呼弹窗 -->
@@ -593,6 +610,7 @@ label.f { display: block; font-size: 12.5px; font-weight: 700; color: var(--text
     <img src="static/avatar_named.png" alt="超级小博">
     <h2>嗨！我是超级小博 🐶</h2>
     <p>第一次见面～怎么称呼你呀？</p>
+    <p style="color:var(--text3);font-size:12px;margin-top:-4px">我会为你建一个专属空间，你的记忆只属于你 🔒</p>
     <input type="text" id="obName" placeholder="你的名字，如：周周" maxlength="12">
     <select id="obGrade">
       <option value="">年级（可选）</option>
@@ -848,7 +866,8 @@ function evHtml(ev) {
     return `<div class="ev-wiki">📚 参考了知识库 ${ev.pages.map(p => "《" + esc(p) + "》").join(" ")}</div>`;
   }
   if (ev.type === "route") {
-    return `<div class="ev-route">🔀 ${esc(SUBJECT_NAMES[ev.to] || ev.to)}接棒啦</div>`;
+    const nm = SUBJECT_NAMES[ev.to] || ev.to;
+    return `<div class="ev-route">${ev.changed === false ? "🎯 " + esc(nm) + "在线陪伴" : "🔀 " + esc(nm) + "接棒啦"}</div>`;
   }
   if (ev.type === "letter") {
     return `<div class="ev-letter">${ev.kind === "birthday" ? "🎂 超级小博记得今天！" : "💌 超级小博主动来信"}</div>`;
@@ -863,6 +882,7 @@ function msgEl(m) {
     ? '<img src="static/student.png" alt="" onerror="this.outerHTML=\'🧒\'">' : BOT_AVATAR;
   div.innerHTML = `<div class="avatar">${av}</div>
     <div class="bubble"><div class="who">${who}</div>
+    ${m.proc ? `<div class="stage done"><span class="st-ico">⚡</span><span class="st-txt">${esc(m.proc)}</span><span class="dots"></span></div>` : ""}
     <div class="evbox">${(m.events || []).map(evHtml).join("")}</div>
     <div class="body">${m.image ? `<img class="msg-img" src="${m.image}">` : ""}${m.role === "user" ? esc(m.text).replace(/\n/g, "<br>") : md(m.text)}</div>
     ${m.action && m.action.mistake_ids && m.action.mistake_ids.length
@@ -985,6 +1005,19 @@ async function send() {
   const bubble = lastMsg.querySelector(".body");
   const evbox = lastMsg.querySelector(".evbox");
   bubble.classList.add("streaming", "cursor");
+
+  // ── Agent 工作过程条：实时亮出小博在干什么 ──
+  const t0 = Date.now();
+  const procChain = [];                       // 最终摘要链（数学问伴 · 计算器 …）
+  const stageEl = document.createElement("div");
+  stageEl.className = "stage";
+  stageEl.innerHTML = `<span class="st-ico">🧠</span><span class="st-txt">超级小博思考中</span><span class="dots"></span>`;
+  evbox.parentNode.insertBefore(stageEl, evbox);
+  const setStage = (ico, txt, chainLabel) => {
+    stageEl.querySelector(".st-ico").textContent = ico;
+    stageEl.querySelector(".st-txt").textContent = txt;
+    if (chainLabel && procChain[procChain.length - 1] !== chainLabel) procChain.push(chainLabel);
+  };
   box.scrollTop = box.scrollHeight;
 
   const url = "api/chat/stream?session_id=" + encodeURIComponent(sid) + "&message=" + encodeURIComponent(text) + (curUid ? "&uid=" + encodeURIComponent(curUid) : "");
@@ -996,7 +1029,17 @@ async function send() {
       if (d.type === "tool" || d.type === "wiki" || d.type === "route") {
         botMsg.events.push(d);
         evbox.insertAdjacentHTML("beforeend", evHtml(d));
+        if (d.type === "route") {
+          const nm = SUBJECT_NAMES[d.to] || d.to;
+          setStage(d.changed === false ? "🎯" : "🔀", nm + (d.changed === false ? "在线·思考中" : "接棒·思考中"), nm);
+        } else if (d.type === "tool") {
+          const [ico, nm] = TOOL_META[d.name] || ["🔧", d.name];
+          setStage(ico, "用" + nm + "处理", nm);
+        } else if (d.type === "wiki") {
+          setStage("📚", "翻知识库找资料", "知识库");
+        }
       } else {
+        if (!botMsg.text) setStage("✍️", "正在回答", "组织回答");
         botMsg.text += d.text || d.delta || "";
         bubble.innerHTML = md(botMsg.text);
       }
@@ -1011,6 +1054,13 @@ async function send() {
     es.close();
     bubble.classList.remove("streaming", "cursor");
     if (!botMsg.text) { botMsg.text = "（没有收到回复）"; bubble.innerHTML = md(botMsg.text); }
+    // 过程条定格为摘要：谁出的手 + 用了哪些家伙 + 用时
+    const secs = ((Date.now() - t0) / 1000).toFixed(1);
+    const chain = procChain.filter(x => x !== "组织回答");
+    botMsg.proc = (chain.length ? chain.join(" · ") : "超级小博") + " · " + secs + "s";
+    stageEl.classList.add("done");
+    stageEl.querySelector(".st-ico").textContent = "⚡";
+    stageEl.querySelector(".st-txt").textContent = botMsg.proc;
     saveMsgs(list);
     sending = false; $("#sendBtn").disabled = false;
     syncSubject(); refreshStatus();
@@ -1311,7 +1361,8 @@ async function loadSettings() {
   } catch (e) { pg.innerHTML = `<div class="card">加载失败：${esc(e.message)}</div>`; }
 }
 
-/* ───────── 角色选择（多档案，记忆隔离）───────── */
+/* ───────── 身份：名字即身份，每人独立空间 ───────── */
+// 内部测试角色（隐藏入口：连点左上角 logo 5 次才出现）
 const PROFILES = [
   {uid:"zhouzhou", name:"周周", emoji:"🦊"},
   {uid:"gezi", name:"鸽子", emoji:"🕊️"},
@@ -1323,31 +1374,77 @@ const PROFILES = [
   {uid:"laoa", name:"老A", emoji:"🎩"},
   {uid:"zisen", name:"子森", emoji:"🌲"},
 ];
-function openProfilePicker() {
-  $("#profileGrid").innerHTML = PROFILES.map(p =>
-    `<div class="profile-card ${p.uid === curUid ? "active" : ""}" data-uid="${p.uid}" data-name="${p.name}">
-       <div class="pe">${p.emoji}</div><div class="pn">${p.name}</div>
-     </div>`).join("");
-  $("#profilePicker").classList.remove("hidden");
+function newUid() { return "u_" + crypto.randomUUID().replace(/-/g, "").slice(0, 10); }
+function updateProfileBtn() {
+  $("#profileBtn").textContent = studentName ? "👤 " + studentName : "👤";
+  $("#profileBtn").title = studentName ? "当前身份：" + studentName : "我的身份";
 }
-function switchProfile(uid, name) {
-  curUid = uid; studentName = name;
-  localStorage.setItem("lc_uid", uid);
-  localStorage.setItem("lc_name", name);
+function bootInto() {
   loadConvs();
   sid = localStorage.getItem("lc_sid_" + curUid) || "";
   if (!sid || !curConv()) { newConv(); }
   else { renderConvList(); renderMsgs(); syncSubject(); }
   $("#profilePicker").classList.add("hidden");
-  refreshStatus(); checkProactive();
+  updateProfileBtn(); refreshStatus(); checkProactive();
+}
+/* 顶栏👤：身份卡片 */
+function openIdentityCard() {
+  $("#profileCard").innerHTML = `
+    <h2>我的身份</h2>
+    <div class="id-who">
+      <div class="iw-em">🧒</div>
+      <div><div class="iw-name">${esc(studentName || "（还没起名字）")}</div>
+      <div class="iw-sub">你的记忆、错题、生词都在自己的专属空间里 🔒</div></div>
+    </div>
+    <div class="id-actions">
+      <button class="btn" id="idContinue">继续学习 🚀</button>
+      <button class="btn" id="idSwitch" style="background:var(--panel2);color:var(--text2)">换个身份（开启新空间）</button>
+    </div>`;
+  $("#profilePicker").classList.remove("hidden");
+  $("#idContinue").onclick = () => $("#profilePicker").classList.add("hidden");
+  $("#idSwitch").onclick = () => {
+    $("#profilePicker").classList.add("hidden");
+    curUid = newUid(); studentName = "";
+    localStorage.setItem("lc_uid", curUid);
+    localStorage.removeItem("lc_name");
+    convs = []; sid = "";
+    bootInto();
+    checkOnboard();                 // 新身份，先认识一下
+  };
+}
+$("#profileBtn").onclick = openIdentityCard;
+/* 隐藏入口：连点左上角 logo 5 次 → 内部测试角色 */
+let brandClicks = 0, brandTimer = null;
+$("#brandBox").addEventListener("click", () => {
+  brandClicks++;
+  clearTimeout(brandTimer);
+  brandTimer = setTimeout(() => { brandClicks = 0; }, 1500);
+  if (brandClicks >= 5) { brandClicks = 0; openLegacyPicker(); }
+});
+function openLegacyPicker() {
+  $("#profileCard").innerHTML = `
+    <h2>内部角色</h2>
+    <p style="color:var(--text3);font-size:13px">测试用档案，各自独立空间～</p>
+    <div class="profile-grid" id="profileGrid">${PROFILES.map(p =>
+      `<div class="profile-card ${p.uid === curUid ? "active" : ""}" data-uid="${p.uid}" data-name="${p.name}">
+         <div class="pe">${p.emoji}</div><div class="pn">${p.name}</div>
+       </div>`).join("")}</div>
+    <button class="btn" id="lgBack" style="margin-top:10px;background:var(--panel2);color:var(--text2)">返回</button>`;
+  $("#profilePicker").classList.remove("hidden");
+  $("#profileGrid").addEventListener("click", e => {
+    const c = e.target.closest(".profile-card"); if (!c) return;
+    switchProfile(c.dataset.uid, c.dataset.name);
+  });
+  $("#lgBack").onclick = () => $("#profilePicker").classList.add("hidden");
+}
+function switchProfile(uid, name) {
+  curUid = uid; studentName = name;
+  localStorage.setItem("lc_uid", uid);
+  localStorage.setItem("lc_name", name);
+  bootInto();
   api("api/profile", { method: "POST", body: { name } }).catch(() => {});  // 存名字到该角色记忆
   toast(`欢迎，${name}！🎉`);
 }
-$("#profileGrid").addEventListener("click", e => {
-  const c = e.target.closest(".profile-card"); if (!c) return;
-  switchProfile(c.dataset.uid, c.dataset.name);
-});
-$("#profileBtn").onclick = openProfilePicker;
 
 /* ───────── 首次见面弹窗 ───────── */
 async function checkOnboard() {
@@ -1370,8 +1467,8 @@ async function submitOnboard() {
   } catch (e) { toast("保存失败：" + e.message); }
   studentName = name; localStorage.setItem("lc_name", name);
   $("#onboard").classList.add("hidden");
-  renderMsgs(); refreshStatus();
-  toast(`认识你啦，${name}！🎉`);
+  renderMsgs(); refreshStatus(); updateProfileBtn();
+  toast(`认识你啦，${name}！🎉 你的专属空间已建好～`);
 }
 $("#obGo").onclick = submitOnboard;
 $("#obName").addEventListener("keydown", e => { if (e.key === "Enter") submitOnboard(); });
@@ -1393,16 +1490,12 @@ async function checkProactive() {
 setInterval(checkProactive, 5 * 60 * 1000);
 
 /* ───────── 启动 ───────── */
-if (!curUid) {
-  openProfilePicker();           // 进站先选角色
-} else {
-  loadConvs();
-  sid = localStorage.getItem("lc_sid_" + curUid) || "";
-  if (!sid || !curConv()) { newConv(); }
-  else { renderConvList(); renderMsgs(); syncSubject(); }
-  refreshStatus();
-  checkProactive();
+if (!curUid) {                     // 第一次来：先建好专属空间，再见面认识
+  curUid = newUid();
+  localStorage.setItem("lc_uid", curUid);
 }
+bootInto();
+checkOnboard();                    // 有名字直接进入；没名字先认识一下
 setTimeout(checkProactive, 800);
 setInterval(refreshStatus, 30000);
 </script>

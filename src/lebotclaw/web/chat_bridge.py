@@ -54,8 +54,8 @@ def blocking_stream_events(ctx: SessionContext, user_input: str):
         before = ctx.active_name()
         ctx.classify_and_route(user_input)
         after = ctx.active_name()
-        if after != before:
-            yield {"type": "route", "from": before, "to": after}
+        # 路由结果始终外露（changed 标记是否换了伙伴），前端据此亮"谁在接棒"
+        yield {"type": "route", "from": before, "to": after, "changed": after != before}
         for ev in ctx.active_agent.stream_events(user_input):
             yield ev
 
