@@ -17,8 +17,9 @@ class SessionContext:
     """单个会话的运行时上下文。满足 core.commands.CommandContext 协议。"""
 
     def __init__(self, sid: str, registry: AgentRegistry, memory: MemoryStore,
-                 channel: str = "web", chat_hint: str = ""):
+                 channel: str = "web", chat_hint: str = "", uid: str = ""):
         self.sid = sid
+        self.uid = uid                  # 用户标识：Web 多档案隔离用（空=全局/CLI）
         self.registry = registry
         self.router = IntentRouter()
         self.memory = memory
@@ -69,7 +70,7 @@ class SessionManager:
         self._lock = threading.Lock()
 
     def get_or_create(self, sid: Optional[str] = None, channel: str = "web",
-                      chat_hint: str = "") -> SessionContext:
+                      chat_hint: str = "", uid: str = "") -> SessionContext:
         with self._lock:
             if channel != "web" and chat_hint:
                 key = f"{channel}:{chat_hint}"
@@ -78,7 +79,8 @@ class SessionManager:
                     return self._sessions[existing]
             if not sid or sid not in self._sessions:
                 sid = sid or str(uuid.uuid4())
-                ctx = SessionContext(sid, self.rt.build_registry(), self.rt.memory, channel, chat_hint)
+                memory = self.rt.memory_for(uid) if uid else self.rt.memory
+                ctx = SessionContext(sid, self.rt.build_registry(uid), memory, channel, chat_hint, uid)
                 self._sessions[sid] = ctx
                 if channel != "web" and chat_hint:
                     self._channel_map[f"{channel}:{chat_hint}"] = sid

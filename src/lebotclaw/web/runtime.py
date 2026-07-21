@@ -79,6 +79,7 @@ class AppRuntime:
         self.scheduler = None      # CronScheduler
         self._bg_started = False
         self._lock = threading.Lock()
+        self._user_memory: dict = {}   # per-user MemoryStore 缓存（uid -> MemoryStore）
 
     def _load_env(self):
         """与 CLI 一致：从 ~/.lebotclaw/.env 注入 env var（setdefault 不覆盖）。"""
@@ -89,21 +90,37 @@ class AppRuntime:
                     k, v = line.split("=", 1)
                     os.environ.setdefault(k.strip(), v.strip())
 
-    def build_registry(self):
-        """每会话工厂：独立 registry（4 个 Agent 独立 _history），共享 memory/adapters。
+    def user_dir_for(self, uid: str) -> str:
+        """每个用户独立数据目录：~/.lebotclaw/users/<uid>/"""
+        return f"~/.lebotclaw/users/{uid}"
 
-        直接复用 ``cli.create_default_registry``，零改 core。
+    def memory_for(self, uid: str):
+        """per-user MemoryStore（缓存复用单连接）。uid 为空则回落全局 memory。"""
+        if not uid:
+            return self.memory
+        with self._lock:
+            if uid not in self._user_memory:
+                self._user_memory[uid] = MemoryStore(f"{self.user_dir_for(uid)}/memory.db")
+            return self._user_memory[uid]
+
+    def build_registry(self, uid=None):
+        """每会话工厂：独立 registry（4 个 Agent 独立 _history）。
+
+        uid 提供时 → per-user memory + per-user 错题/生词 store（记忆隔离）；
+        uid 为空 → 全局共享（CLI 兼容 / 旧单用户）。wiki 始终全局共享。
         """
         return cli_mod.create_default_registry(
             model_adapters=self.model_adapters,
             default_model=self.default_model,
-            memory=self.memory,
+            memory=self.memory_for(uid) if uid else self.memory,
             style_extra=self.style_extra,
             wiki=self.wiki,
+            user_dir=self.user_dir_for(uid) if uid else None,
         )
 
-    def student_name(self) -> str:
-        return self.config.get("student_name") or self.memory.get_student_profile().get("名字", "")
+    def student_name(self, uid=None) -> str:
+        mem = self.memory_for(uid) if uid else self.memory
+        return mem.get_student_profile().get("名字", "") or (self.config.get("student_name", "") if not uid else "")
 
     def has_model(self) -> bool:
         return bool(self.model_adapters) and self.default_model is not None

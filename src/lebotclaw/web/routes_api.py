@@ -1,6 +1,7 @@
 """/api/* 路由（挂在 NiceGUI 的 FastAPI app 上）。
 
 供脚本/测试/外部对接使用。聊天同样经 chat_bridge.io_bound，不阻塞事件循环。
+多用户：每个需要 per-user 数据的端点接收 uid（query 参数），按 uid 取独立记忆/错题/生词。
 """
 import json
 
@@ -67,6 +68,13 @@ def _authorized(runtime, request: Request) -> bool:
 
 
 def register_api_routes(runtime):
+    # per-user 数据目录 / 记忆：uid 为空回落全局（CLI 兼容）
+    def ud(uid: str) -> str:
+        return runtime.user_dir_for(uid) if uid else "~/.lebotclaw"
+
+    def mem(uid: str):
+        return runtime.memory_for(uid) if uid else runtime.memory
+
     @app.get("/api/models")
     async def models_list():
         """设置页模型卡片：仅开放套餐内子模型（官方 API 按量计费，不开放切换）。"""
@@ -90,10 +98,10 @@ def register_api_routes(runtime):
         return {"ok": True, "current": sel, "label": runtime.model_label()}
 
     @app.get("/api/health")
-    async def health():
+    async def health(uid: str = ""):
         return {
             "ok": True,
-            "student": runtime.student_name(),
+            "student": runtime.student_name(uid),
             "has_model": runtime.has_model(),
             "default_model": runtime.model_label(),
             "adapter": runtime.default_model,
@@ -101,7 +109,7 @@ def register_api_routes(runtime):
         }
 
     @app.post("/api/chat")
-    async def chat(request: Request):
+    async def chat(request: Request, uid: str = ""):
         if not _authorized(runtime, request):
             return JSONResponse({"error": "unauthorized"}, status_code=401)
         try:
@@ -110,17 +118,17 @@ def register_api_routes(runtime):
             payload = {}
         sid = payload.get("session_id") or "api-default"
         message = payload.get("message", "")
-        ctx = runtime.sessions.get_or_create(sid, channel="web")
+        ctx = runtime.sessions.get_or_create(sid, channel="web", uid=uid)
         reply = await api_chat(ctx, message)
         return {"session_id": ctx.sid, "reply": reply}
 
     @app.get("/api/chat/stream")
-    async def chat_stream(message: str, session_id: str = "api-stream"):
+    async def chat_stream(message: str, session_id: str = "api-stream", uid: str = ""):
         """SSE 事件流：route/wiki/tool/delta 事件逐条下发（保留工具调用并外露）。
 
         同步 generator 由 Starlette 在 threadpool 迭代，不阻塞事件循环。
         """
-        ctx = runtime.sessions.get_or_create(session_id, channel="web")
+        ctx = runtime.sessions.get_or_create(session_id, channel="web", uid=uid)
 
         def gen():
             for ev in blocking_stream_events(ctx, message):
@@ -191,12 +199,12 @@ def register_api_routes(runtime):
     # ── dashboard 数据接口 ──
 
     @app.get("/api/overview")
-    async def overview():
+    async def overview(uid: str = ""):
         """侧栏状态 + 顶栏模型徽标。"""
         fcfg = runtime.config.get("channels", {}).get("feishu", {})
         return {
             "ok": True,
-            "student": runtime.student_name(),
+            "student": runtime.student_name(uid),
             "has_model": runtime.has_model(),
             "default_model": runtime.model_label(),
             "adapter": runtime.default_model,
@@ -207,9 +215,10 @@ def register_api_routes(runtime):
         }
 
     @app.get("/api/memory")
-    async def memory_all():
+    async def memory_all(uid: str = ""):
         """4 类记忆，dashboard 记忆页用。"""
         from nicegui import run
+        m = mem(uid)
         cats = ["student_profile", "learning_progress", "skill_memory", "session_summary"]
 
         def _load():
@@ -217,18 +226,19 @@ def register_api_routes(runtime):
                 c: [
                     {"key": e.key, "content": e.content, "tags": e.tags,
                      "updated_at": e.updated_at}
-                    for e in reversed(runtime.memory.search_memory(category=c, limit=50))
+                    for e in reversed(m.search_memory(category=c, limit=50))
                 ]
                 for c in cats
             }
         return {"memory": await run.io_bound(_load)}
 
     @app.get("/api/starmap")
-    async def starmap():
+    async def starmap(uid: str = ""):
         """知识星图：知识页=星星（聊过的点亮）、已掌握错题=金星。"""
         from lebotclaw.tools.builtin.store import JsonListStore
+        d = ud(uid)
         covered: dict = {}
-        for c in JsonListStore("~/.lebotclaw/covered.json").all():
+        for c in JsonListStore(f"{d}/covered.json").all():
             t = c.get("title", "")
             if t:
                 covered[t] = covered.get(t, 0) + 1
@@ -238,64 +248,67 @@ def register_api_routes(runtime):
         ]
         gold = [
             {"title": i.get("question", "")[:24], "note": i.get("note", "")[:30]}
-            for i in JsonListStore("~/.lebotclaw/mistakes.json").all()
+            for i in JsonListStore(f"{d}/mistakes.json").all()
             if i.get("mastered")
         ]
         return {"stars": stars, "gold": gold,
                 "covered_count": sum(1 for s in stars if s["covered"])}
 
     @app.get("/api/report/weekly")
-    async def report_weekly():
+    async def report_weekly(uid: str = ""):
         """家长周报：有缓存先返回缓存（带上 stats 供页面渲染）。"""
         from lebotclaw.web import report as report_mod
-        d = report_mod.cached_report()
-        if not d:
-            return {"report": None, "stats": report_mod.collect_stats(runtime.memory)}
-        return {"report": d["text"], "generated_at": d["generated_at"], "stats": d.get("stats", {})}
+        d = ud(uid)
+        cached = report_mod.cached_report(d)
+        if not cached:
+            return {"report": None, "stats": report_mod.collect_stats(mem(uid), d)}
+        return {"report": cached["text"], "generated_at": cached["generated_at"], "stats": cached.get("stats", {})}
 
     @app.post("/api/report/weekly/refresh")
-    async def report_weekly_refresh():
+    async def report_weekly_refresh(uid: str = ""):
         """重新生成周报（LLM 阻塞调用走 io_bound）。"""
         from nicegui import run
         from lebotclaw.web import report as report_mod
+        d = ud(uid)
         adapter = runtime.model_adapters.get(runtime.default_model)
         if adapter is None:
             return JSONResponse({"error": "no model"}, status_code=503)
-        text = await run.io_bound(report_mod.generate_report, adapter, runtime.memory)
-        d = report_mod.cached_report() or {}
-        return {"report": text, "generated_at": d.get("generated_at"), "stats": d.get("stats", {})}
+        text = await run.io_bound(report_mod.generate_report, adapter, mem(uid), d)
+        cached = report_mod.cached_report(d) or {}
+        return {"report": text, "generated_at": cached.get("generated_at"), "stats": cached.get("stats", {})}
 
     @app.post("/api/quiz/generate")
-    async def quiz_generate(request: Request):
+    async def quiz_generate(request: Request, uid: str = ""):
         """按错题生成专属选择题（LLM 出题，走 io_bound 不阻塞事件循环）。"""
         from nicegui import run
         from lebotclaw.web import quiz as quiz_mod
+        d = ud(uid)
         payload = await request.json()
         adapter = runtime.model_adapters.get(runtime.default_model)
         if adapter is None:
             return JSONResponse({"error": "no model"}, status_code=503)
         qz = await run.io_bound(
-            quiz_mod.generate_quiz, adapter, runtime.memory,
-            payload.get("mistake_ids") or [], int(payload.get("count", 3)),
+            quiz_mod.generate_quiz, adapter, mem(uid),
+            payload.get("mistake_ids") or [], int(payload.get("count", 3)), d,
         )
         if not qz:
             return JSONResponse({"error": "错题本还是空的，先去聊几道错题吧"}, status_code=400)
         return {"quiz_id": qz["id"], "count": len(qz["questions"])}
 
     @app.get("/api/quiz/{quiz_id}")
-    async def quiz_get(quiz_id: str):
+    async def quiz_get(quiz_id: str, uid: str = ""):
         from lebotclaw.web import quiz as quiz_mod
-        qz = quiz_mod.get_quiz(quiz_id)
+        qz = quiz_mod.get_quiz(quiz_id, ud(uid))
         if not qz:
             return JSONResponse({"error": "not found"}, status_code=404)
         return quiz_mod.public_quiz(qz)
 
     @app.post("/api/quiz/answer")
-    async def quiz_answer(request: Request):
+    async def quiz_answer(request: Request, uid: str = ""):
         from lebotclaw.web import quiz as quiz_mod
         payload = await request.json()
         r = quiz_mod.answer_question(
-            payload.get("quiz_id", ""), int(payload.get("q_index", 0)), payload.get("choice", ""))
+            payload.get("quiz_id", ""), int(payload.get("q_index", 0)), payload.get("choice", ""), ud(uid))
         if r is None:
             return JSONResponse({"error": "not found"}, status_code=404)
         return r
@@ -322,24 +335,24 @@ def register_api_routes(runtime):
         return {"reply": reply}
 
     @app.get("/api/proactive")
-    async def proactive(consume: bool = False):
+    async def proactive(consume: bool = False, uid: str = ""):
         """小博主动来信：晨间问候/错题间隔重复/生日。consume=1 时标记已发。"""
         from lebotclaw.web.proactive import pending_messages
-        return {"messages": pending_messages(runtime.memory, consume=consume)}
+        return {"messages": pending_messages(mem(uid), consume=consume, user_dir=ud(uid))}
 
     @app.get("/api/mistakes")
-    async def mistakes_list():
+    async def mistakes_list(uid: str = ""):
         """错题本列表（记忆页页签用），未掌握在前。"""
         from lebotclaw.tools.builtin.store import JsonListStore
-        items = JsonListStore("~/.lebotclaw/mistakes.json").all()
+        items = JsonListStore(f"{ud(uid)}/mistakes.json").all()
         items.sort(key=lambda i: (i.get("mastered", False), -i.get("created_at", 0)))
         return {"items": items}
 
     @app.get("/api/words")
-    async def words_list():
+    async def words_list(uid: str = ""):
         """生词本列表（记忆页页签用），未掌握在前。"""
         from lebotclaw.tools.builtin.store import JsonListStore
-        items = JsonListStore("~/.lebotclaw/wordbank.json").all()
+        items = JsonListStore(f"{ud(uid)}/wordbank.json").all()
         items.sort(key=lambda i: (i.get("mastered", False), -i.get("created_at", 0)))
         return {"items": items}
 
@@ -370,15 +383,15 @@ def register_api_routes(runtime):
         return {"deleted": page_id}
 
     @app.post("/api/plan")
-    async def make_plan(request: Request):
+    async def make_plan(request: Request, uid: str = ""):
         from nicegui import run
         from lebotclaw.core.planner import Planner
         payload = await request.json()
         goal = (payload.get("goal") or "").strip()
         if not goal:
             return JSONResponse({"error": "goal required"}, status_code=400)
-        plan = await run.io_bound(
-            Planner().decompose, goal, "", runtime.config.get("grade", ""))
+        grade = (mem(uid).get_student_profile().get("年级", "") if uid else runtime.config.get("grade", ""))
+        plan = await run.io_bound(Planner().decompose, goal, "", grade)
         return {"goal": goal, "steps": [
             {"id": s.id, "title": s.title, "description": s.description,
              "status": s.status}
@@ -386,33 +399,37 @@ def register_api_routes(runtime):
         ]}
 
     @app.get("/api/profile")
-    async def profile_get():
+    async def profile_get(uid: str = ""):
+        m = mem(uid)
+        prof = m.get_student_profile()
         return {
-            "name": runtime.config.get("student_name", ""),
-            "grade": runtime.config.get("grade", ""),
+            "name": prof.get("名字", "") or (runtime.config.get("student_name", "") if not uid else ""),
+            "grade": prof.get("年级", "") or (runtime.config.get("grade", "") if not uid else ""),
             "style": runtime.config.get("style", "warm"),
             "has_model": runtime.has_model(),
             "default_model": runtime.model_label(),
             "available_models": list(runtime.model_adapters.keys()),
-            "profile": runtime.memory.get_student_profile(),
+            "profile": prof,
         }
 
     @app.post("/api/profile")
-    async def profile_save(request: Request):
+    async def profile_save(request: Request, uid: str = ""):
         from lebotclaw.core import cli as cli_mod
         payload = await request.json()
         name = (payload.get("name") or "").strip()
         grade = (payload.get("grade") or "").strip()
+        m = mem(uid)
         if name:
-            runtime.memory.save_memory("student_profile", "general", "名字", name, ["名字"])
+            m.save_memory("student_profile", "general", "名字", name, ["名字"])
         if grade:
-            runtime.memory.save_memory("student_profile", "general", "年级", grade, ["年级"])
-        cfg = cli_mod._load_config()
-        cfg["student_name"] = name
-        cfg["grade"] = grade
-        cli_mod._save_config(cfg)
-        runtime.config["student_name"] = name
-        runtime.config["grade"] = grade
+            m.save_memory("student_profile", "general", "年级", grade, ["年级"])
+        if not uid:  # 全局模式才写 config（兼容旧单用户），per-user 名字只存 memory
+            cfg = cli_mod._load_config()
+            cfg["student_name"] = name
+            cfg["grade"] = grade
+            cli_mod._save_config(cfg)
+            runtime.config["student_name"] = name
+            runtime.config["grade"] = grade
         return {"ok": True}
 
     @app.get("/api/session/info")
@@ -421,10 +438,10 @@ def register_api_routes(runtime):
         return {"active_subject": ctx.active_name() if ctx else "general"}
 
     @app.post("/api/session/subject")
-    async def session_subject(request: Request):
+    async def session_subject(request: Request, uid: str = ""):
         payload = await request.json()
         subject = payload.get("subject", "general")
-        ctx = runtime.sessions.get_or_create(payload.get("session_id"), channel="web")
+        ctx = runtime.sessions.get_or_create(payload.get("session_id"), channel="web", uid=uid)
         with ctx.lock:
             try:
                 ctx.registry.switch_to(subject)

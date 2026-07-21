@@ -468,6 +468,19 @@ label.f { display: block; font-size: 12.5px; font-weight: 700; color: var(--text
   padding: 10px 22px; font-size: 13.5px; font-weight: 700; color: var(--accent2); z-index: 99;
   box-shadow: var(--shadow-accent);
 }
+/* 角色选择卡片 */
+.profile-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 16px; }
+.profile-card {
+  cursor: pointer; border: 2px solid var(--border2); border-radius: 16px;
+  padding: 16px 8px; text-align: center; background: var(--panel2);
+  transition: transform .14s, border-color .14s, box-shadow .14s;
+}
+.profile-card:hover { transform: translateY(-3px); border-color: var(--accent); box-shadow: var(--shadow-accent); }
+.profile-card.active { border-color: var(--accent); background: var(--hover); }
+.profile-card .pe { font-size: 32px; }
+.profile-card .pn { font-size: 14px; font-weight: 700; margin-top: 6px; color: var(--text); }
+#profileBtn { font-size: 16px; }
+
 /* 首次见面弹窗 */
 #onboard {
   position: fixed; inset: 0; z-index: 200;
@@ -523,6 +536,7 @@ label.f { display: block; font-size: 12.5px; font-weight: 700; color: var(--text
     <div id="topbar">
       <span id="crumb">对话</span>
       <span id="modelBadge">…</span>
+      <button id="profileBtn" title="切换角色">👤</button>
       <button id="themeBtn" title="切换主题">🌞 白天</button>
     </div>
 
@@ -562,6 +576,15 @@ label.f { display: block; font-size: 12.5px; font-weight: 700; color: var(--text
     <!-- 设置 -->
     <section id="view-settings" class="view hidden"><div class="page" id="settingsPage"></div></section>
   </main>
+</div>
+
+<!-- 角色选择（多档案，记忆隔离） -->
+<div id="profilePicker" class="hidden">
+  <div class="ob-card">
+    <h2>选个角色进入</h2>
+    <p style="color:var(--text3);font-size:13px">每位伙伴有自己独立的记忆空间，互不串～</p>
+    <div class="profile-grid" id="profileGrid"></div>
+  </div>
 </div>
 
 <!-- 首次见面：称呼弹窗 -->
@@ -635,6 +658,7 @@ function md(src) {
 }
 
 async function api(path, opts = {}) {
+  if (curUid) { path += (path.includes("?") ? "&" : "?") + "uid=" + encodeURIComponent(curUid); }
   const r = await fetch(path, opts.method ? {
     method: opts.method,
     headers: {"Content-Type": "application/json"},
@@ -748,12 +772,14 @@ async function refreshStatus() {
 /* ───────── 对话 ───────── */
 const SUBJECTS = [["general","🌟 万能"],["math","📐 数学"],["chinese","📝 语文"],["science","🔬 科学"]];
 let studentName = localStorage.getItem("lc_name") || "";
-let convs = JSON.parse(localStorage.getItem("lc_convs") || "[]");
-let sid = localStorage.getItem("lc_sid") || "";
+let curUid = localStorage.getItem("lc_uid") || "";
+let convs = [];
+let sid = "";
 let activeSubject = "general";
 let sending = false;
 
-function saveConvs() { localStorage.setItem("lc_convs", JSON.stringify(convs.slice(0, 50))); }
+function saveConvs() { if (curUid) localStorage.setItem("lc_convs_" + curUid, JSON.stringify(convs.slice(0, 50))); }
+function loadConvs() { convs = JSON.parse(localStorage.getItem("lc_convs_" + curUid) || "[]"); }
 function getMsgs() { return JSON.parse(localStorage.getItem("lc_msgs_" + sid) || "[]"); }
 function saveMsgs(list) {
   // 照片只保留最近 20 条的 dataURL，防 localStorage 爆容量
@@ -766,7 +792,7 @@ function curConv() { return convs.find(c => c.sid === sid); }
 function newConv() {
   sid = crypto.randomUUID();
   convs.unshift({ sid, title: "新对话", created: Date.now() });
-  saveConvs(); localStorage.setItem("lc_sid", sid);
+  saveConvs(); localStorage.setItem("lc_sid_" + curUid, sid);
   activeSubject = "general";
   renderConvList(); renderMsgs(); syncSubject();
 }
@@ -778,7 +804,7 @@ function renderConvList() {
 }
 $("#convItems").addEventListener("click", e => {
   const it = e.target.closest(".conv-item"); if (!it || it.dataset.sid === sid) return;
-  sid = it.dataset.sid; localStorage.setItem("lc_sid", sid);
+  sid = it.dataset.sid; localStorage.setItem("lc_sid_" + curUid, sid);
   renderConvList(); renderMsgs(); syncSubject();
 });
 $("#newConv").onclick = newConv;
@@ -961,7 +987,7 @@ async function send() {
   bubble.classList.add("streaming", "cursor");
   box.scrollTop = box.scrollHeight;
 
-  const url = "api/chat/stream?session_id=" + encodeURIComponent(sid) + "&message=" + encodeURIComponent(text);
+  const url = "api/chat/stream?session_id=" + encodeURIComponent(sid) + "&message=" + encodeURIComponent(text) + (curUid ? "&uid=" + encodeURIComponent(curUid) : "");
   const es = new EventSource(url);
   es.onmessage = ev => {
     if (ev.data === "[DONE]") { finish(); return; }
@@ -1285,6 +1311,44 @@ async function loadSettings() {
   } catch (e) { pg.innerHTML = `<div class="card">加载失败：${esc(e.message)}</div>`; }
 }
 
+/* ───────── 角色选择（多档案，记忆隔离）───────── */
+const PROFILES = [
+  {uid:"zhouzhou", name:"周周", emoji:"🦊"},
+  {uid:"gezi", name:"鸽子", emoji:"🕊️"},
+  {uid:"evan", name:"Evan", emoji:"🚀"},
+  {uid:"abin", name:"阿斌", emoji:"🐼"},
+  {uid:"kk", name:"KK", emoji:"🎸"},
+  {uid:"jingjing", name:"晶晶", emoji:"💎"},
+  {uid:"laohe", name:"老何", emoji:"🍵"},
+  {uid:"laoa", name:"老A", emoji:"🎩"},
+  {uid:"zisen", name:"子森", emoji:"🌲"},
+];
+function openProfilePicker() {
+  $("#profileGrid").innerHTML = PROFILES.map(p =>
+    `<div class="profile-card ${p.uid === curUid ? "active" : ""}" data-uid="${p.uid}" data-name="${p.name}">
+       <div class="pe">${p.emoji}</div><div class="pn">${p.name}</div>
+     </div>`).join("");
+  $("#profilePicker").classList.remove("hidden");
+}
+function switchProfile(uid, name) {
+  curUid = uid; studentName = name;
+  localStorage.setItem("lc_uid", uid);
+  localStorage.setItem("lc_name", name);
+  loadConvs();
+  sid = localStorage.getItem("lc_sid_" + curUid) || "";
+  if (!sid || !curConv()) { newConv(); }
+  else { renderConvList(); renderMsgs(); syncSubject(); }
+  $("#profilePicker").classList.add("hidden");
+  refreshStatus(); checkProactive();
+  api("api/profile", { method: "POST", body: { name } }).catch(() => {});  // 存名字到该角色记忆
+  toast(`欢迎，${name}！🎉`);
+}
+$("#profileGrid").addEventListener("click", e => {
+  const c = e.target.closest(".profile-card"); if (!c) return;
+  switchProfile(c.dataset.uid, c.dataset.name);
+});
+$("#profileBtn").onclick = openProfilePicker;
+
 /* ───────── 首次见面弹窗 ───────── */
 async function checkOnboard() {
   try {
@@ -1329,9 +1393,16 @@ async function checkProactive() {
 setInterval(checkProactive, 5 * 60 * 1000);
 
 /* ───────── 启动 ───────── */
-if (!sid) { newConv(); } else { if (!curConv()) { convs.unshift({ sid, title: "对话", created: Date.now() }); saveConvs(); } renderConvList(); renderMsgs(); syncSubject(); }
-refreshStatus();
-checkOnboard();
+if (!curUid) {
+  openProfilePicker();           // 进站先选角色
+} else {
+  loadConvs();
+  sid = localStorage.getItem("lc_sid_" + curUid) || "";
+  if (!sid || !curConv()) { newConv(); }
+  else { renderConvList(); renderMsgs(); syncSubject(); }
+  refreshStatus();
+  checkProactive();
+}
 setTimeout(checkProactive, 800);
 setInterval(refreshStatus, 30000);
 </script>

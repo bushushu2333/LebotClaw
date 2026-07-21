@@ -1,8 +1,6 @@
 from lebotclaw.tools.base import Tool, ToolResult
 from lebotclaw.tools.builtin.store import JsonListStore
 
-_store = JsonListStore("~/.lebotclaw/mistakes.json")
-
 _SUBJECTS = {"math": "数学", "chinese": "语文", "science": "科学", "general": "通用"}
 
 
@@ -35,6 +33,10 @@ class MistakeBookTool(Tool):
         "required": ["action"],
     }
 
+    def __init__(self, store=None):
+        # store 按用户隔离：Web 建会话时传入 per-user 路径，CLI 默认全局
+        self.store = store or JsonListStore("~/.lebotclaw/mistakes.json")
+
     def execute(self, **kwargs) -> ToolResult:
         action = kwargs.get("action", "").strip()
         if action == "add":
@@ -49,7 +51,7 @@ class MistakeBookTool(Tool):
         question = (kw.get("question") or "").strip()
         if not question:
             return ToolResult(success=False, output="", error="question 不能为空")
-        item = _store.add({
+        item = self.store.add({
             "subject": (kw.get("subject") or "general").strip(),
             "question": question,
             "wrong_answer": (kw.get("wrong_answer") or "").strip(),
@@ -65,7 +67,7 @@ class MistakeBookTool(Tool):
 
     def _list(self, kw) -> ToolResult:
         subject = (kw.get("subject") or "").strip()
-        items = _store.all()
+        items = self.store.all()
         if subject:
             items = [i for i in items if i.get("subject") == subject]
         if not items:
@@ -86,7 +88,7 @@ class MistakeBookTool(Tool):
         mid = kw.get("mistake_id")
         if not mid:
             return ToolResult(success=False, output="", error="mistake_id 不能为空")
-        item = _store.update(int(mid), mastered=True)
+        item = self.store.update(int(mid), mastered=True)
         if not item:
             return ToolResult(success=False, output="", error=f"没找到第 {mid} 题")
         return ToolResult(success=True, output=f"第 {mid} 题已标记为掌握 ✅")

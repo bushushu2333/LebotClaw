@@ -1,7 +1,7 @@
 """超级小博主动来信：晨间问候 / 错题间隔重复复习提醒 / 生日祝福。
 
 通用聊天机器人从不主动开口——这是"伙伴"和"工具"的分水岭。
-状态存 ~/.lebotclaw/proactive_state.json（每天同类消息最多发一次）。
+状态存 <user_dir>/proactive_state.json（每天同类消息最多发一次）。
 飞书等外部推送复用 pending_messages() 即可（凭证待填，先网页内来信）。
 """
 import json
@@ -12,24 +12,28 @@ from pathlib import Path
 
 from lebotclaw.tools.builtin.store import JsonListStore
 
-_STATE_FILE = Path.home() / ".lebotclaw" / "proactive_state.json"
-
 # 错题记录后第 N 天提醒复习（间隔重复）
 REVIEW_WINDOWS = (1, 3, 7, 15)
 
 
-def _load_state() -> dict:
-    if _STATE_FILE.exists():
+def _state_file(user_dir: str):
+    return Path(user_dir).expanduser() / "proactive_state.json"
+
+
+def _load_state(user_dir: str) -> dict:
+    f = _state_file(user_dir)
+    if f.exists():
         try:
-            return json.loads(_STATE_FILE.read_text(encoding="utf-8"))
+            return json.loads(f.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError):
             pass
     return {}
 
 
-def _save_state(state: dict):
-    _STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
-    _STATE_FILE.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
+def _save_state(state: dict, user_dir: str):
+    f = _state_file(user_dir)
+    f.parent.mkdir(parents=True, exist_ok=True)
+    f.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def _greeting(now: datetime, name: str) -> str:
@@ -49,11 +53,11 @@ def _is_birthday(birthday: str, now: datetime) -> bool:
     return bool(m) and (now.month, now.day) == (int(m.group(1)), int(m.group(2)))
 
 
-def pending_messages(memory, consume: bool = False) -> list:
+def pending_messages(memory, consume: bool = False, user_dir: str = "~/.lebotclaw") -> list:
     """待推送的主动消息。consume=True 时落状态（同类消息当天不再重复）。"""
     now = datetime.now()
     today = now.strftime("%Y-%m-%d")
-    state = _load_state()
+    state = _load_state(user_dir)
     msgs = []
 
     profile = memory.get_student_profile()
@@ -76,7 +80,7 @@ def pending_messages(memory, consume: bool = False) -> list:
     # 3) 错题间隔重复提醒
     reminded = state.setdefault("reminded", {})
     due = []
-    for it in JsonListStore("~/.lebotclaw/mistakes.json").all():
+    for it in JsonListStore(f"{user_dir}/mistakes.json").all():
         if it.get("mastered"):
             continue
         created = datetime.fromtimestamp(it.get("created_at", time.time()))
@@ -95,5 +99,5 @@ def pending_messages(memory, consume: bool = False) -> list:
         })
 
     if consume:
-        _save_state(state)
+        _save_state(state, user_dir)
     return msgs

@@ -13,8 +13,6 @@ from pathlib import Path
 
 from lebotclaw.tools.builtin.store import JsonListStore
 
-_QUIZ_FILE = Path.home() / ".lebotclaw" / "quizzes.json"
-
 _GEN_PROMPT = """你是中小学出题老师。根据学生的错题，出 {count} 道考查相同知识点、但数字或情境不同的单项选择题（举一反三，严禁出原题）。
 学生年级：{grade}
 
@@ -25,22 +23,28 @@ _GEN_PROMPT = """你是中小学出题老师。根据学生的错题，出 {coun
 [{{"q": "题干", "options": {{"A": "...", "B": "...", "C": "...", "D": "..."}}, "answer": "A", "explain": "一句话讲清考点和易错点"}}]"""
 
 
-def _load() -> dict:
-    if _QUIZ_FILE.exists():
+def _quiz_file(user_dir: str):
+    return Path(user_dir).expanduser() / "quizzes.json"
+
+
+def _load(user_dir: str) -> dict:
+    f = _quiz_file(user_dir)
+    if f.exists():
         try:
-            return json.loads(_QUIZ_FILE.read_text(encoding="utf-8"))
+            return json.loads(f.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError):
             pass
     return {}
 
 
-def _save(d: dict):
-    _QUIZ_FILE.parent.mkdir(parents=True, exist_ok=True)
-    _QUIZ_FILE.write_text(json.dumps(d, ensure_ascii=False, indent=2), encoding="utf-8")
+def _save(d: dict, user_dir: str):
+    f = _quiz_file(user_dir)
+    f.parent.mkdir(parents=True, exist_ok=True)
+    f.write_text(json.dumps(d, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def _mistake_store() -> JsonListStore:
-    return JsonListStore("~/.lebotclaw/mistakes.json")
+def _mistake_store(user_dir: str) -> JsonListStore:
+    return JsonListStore(f"{user_dir}/mistakes.json")
 
 
 def _parse_questions(text: str) -> list:
@@ -63,9 +67,9 @@ def _parse_questions(text: str) -> list:
     return out
 
 
-def generate_quiz(adapter, memory, mistake_ids: list = None, count: int = 3) -> dict | None:
+def generate_quiz(adapter, memory, mistake_ids: list = None, count: int = 3, user_dir: str = "~/.lebotclaw") -> dict | None:
     """按错题生成选择题卷。mistake_ids 为空则取最近未掌握错题。"""
-    items = _mistake_store().all()
+    items = _mistake_store(user_dir).all()
     sel = [i for i in items if i.get("id") in (mistake_ids or [])]
     if not sel:
         sel = [i for i in items if not i.get("mastered")][-3:]
@@ -93,14 +97,14 @@ def generate_quiz(adapter, memory, mistake_ids: list = None, count: int = 3) -> 
         "passed": False,
         "created_at": time.time(),
     }
-    d = _load()
+    d = _load(user_dir)
     d[qz["id"]] = qz
-    _save(d)
+    _save(d, user_dir)
     return qz
 
 
-def get_quiz(quiz_id: str) -> dict | None:
-    return _load().get(quiz_id)
+def get_quiz(quiz_id: str, user_dir: str = "~/.lebotclaw") -> dict | None:
+    return _load(user_dir).get(quiz_id)
 
 
 def public_quiz(qz: dict) -> dict:
@@ -113,9 +117,9 @@ def public_quiz(qz: dict) -> dict:
     }
 
 
-def answer_question(quiz_id: str, q_index: int, choice: str) -> dict | None:
+def answer_question(quiz_id: str, q_index: int, choice: str, user_dir: str = "~/.lebotclaw") -> dict | None:
     """判分。全部答完且全对 → 关联错题自动标记已掌握。"""
-    d = _load()
+    d = _load(user_dir)
     qz = d.get(quiz_id)
     if not qz or q_index >= len(qz["questions"]):
         return None
@@ -127,10 +131,10 @@ def answer_question(quiz_id: str, q_index: int, choice: str) -> dict | None:
     passed = finished and all(a["correct"] for a in qz["answers"].values())
     if passed and not qz.get("passed"):
         qz["passed"] = True
-        store = _mistake_store()
+        store = _mistake_store(user_dir)
         for mid in qz.get("mistake_ids", []):
             store.update(mid, mastered=True)
-    _save(d)
+    _save(d, user_dir)
     return {
         "correct": correct,
         "answer": q["answer"],

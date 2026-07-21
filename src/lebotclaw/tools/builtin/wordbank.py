@@ -1,8 +1,6 @@
 from lebotclaw.tools.base import Tool, ToolResult
 from lebotclaw.tools.builtin.store import JsonListStore
 
-_store = JsonListStore("~/.lebotclaw/wordbank.json")
-
 
 class WordBankTool(Tool):
     name = "word_bank"
@@ -29,6 +27,10 @@ class WordBankTool(Tool):
         "required": ["action"],
     }
 
+    def __init__(self, store=None):
+        # store 按用户隔离：Web 建会话时传入 per-user 路径，CLI 默认全局
+        self.store = store or JsonListStore("~/.lebotclaw/wordbank.json")
+
     def execute(self, **kwargs) -> ToolResult:
         action = kwargs.get("action", "").strip()
         if action == "add":
@@ -43,12 +45,12 @@ class WordBankTool(Tool):
         word = (kw.get("word") or "").strip()
         if not word:
             return ToolResult(success=False, output="", error="word 不能为空")
-        for it in _store.all():
+        for it in self.store.all():
             if it.get("word") == word and not it.get("mastered"):
                 return ToolResult(success=True,
                                   output=f"「{word}」已经在生词本里啦（第 {it['id']} 条）",
                                   metadata={"id": it["id"]})
-        item = _store.add({
+        item = self.store.add({
             "word": word,
             "pinyin": (kw.get("pinyin") or "").strip(),
             "meaning": (kw.get("meaning") or "").strip(),
@@ -62,7 +64,7 @@ class WordBankTool(Tool):
         )
 
     def _list(self) -> ToolResult:
-        items = _store.all()
+        items = self.store.all()
         if not items:
             return ToolResult(success=True, output="生词本还是空的，遇到新词随时告诉我～")
         items.sort(key=lambda i: (i.get("mastered", False), -i.get("created_at", 0)))
@@ -82,7 +84,7 @@ class WordBankTool(Tool):
         wid = kw.get("word_id")
         if not wid:
             return ToolResult(success=False, output="", error="word_id 不能为空")
-        item = _store.update(int(wid), mastered=True)
+        item = self.store.update(int(wid), mastered=True)
         if not item:
             return ToolResult(success=False, output="", error=f"没找到第 {wid} 条")
         return ToolResult(success=True, output=f"「{item['word']}」已标记为掌握 ✅")

@@ -89,6 +89,7 @@ class Agent:
         memory: MemoryStore = None,
         planner: Planner = None,
         wiki=None,
+        user_dir: str = None,
     ):
         self.name = name
         self.system_prompt = system_prompt
@@ -97,6 +98,7 @@ class Agent:
         self.memory = memory or MemoryStore()
         self.planner = planner or Planner()
         self.wiki = wiki
+        self.user_dir = user_dir or "~/.lebotclaw"
         self._history: list[dict] = []
         self._frozen_context_id: Optional[str] = None
 
@@ -309,7 +311,7 @@ class Agent:
                     # 星图埋点：聊过的知识点落 covered.json（星空页点亮用）
                     try:
                         from lebotclaw.tools.builtin.store import JsonListStore
-                        store = JsonListStore("~/.lebotclaw/covered.json")
+                        store = JsonListStore(f"{self.user_dir}/covered.json")
                         for p in hits:
                             store.add({"title": p.title})
                     except Exception:  # noqa: BLE001
