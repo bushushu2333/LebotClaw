@@ -489,3 +489,41 @@ def register_api_routes(runtime):
             return JSONResponse({"error": "no model"}, status_code=503)
         title = await run.io_bound(_gen_title, adapter, messages)
         return {"title": title}
+
+    # ── 内容守护：词库管理（增删词，引擎热加载自动生效）──
+    @app.get("/api/moderation/words")
+    async def mod_words_list():
+        from lebotclaw.core import moderation as _mod
+        out = {}
+        for cat, wl in _mod._Store.get().items():
+            out[cat] = {"severity": wl.severity, "hint": wl.hint,
+                        "count": len(wl.words), "words": wl.words}
+        return out
+
+    @app.post("/api/moderation/words")
+    async def mod_words_edit(request: Request):
+        from pathlib import Path as _Path
+        from lebotclaw.core import moderation as _mod
+        payload = await request.json()
+        cat = payload.get("category", "")
+        word = (payload.get("word") or "").strip()
+        action = payload.get("action", "add")
+        if cat not in _mod._ORDER or not word:
+            return JSONResponse({"error": "bad category/word"}, status_code=400)
+        p = _mod._WORD_DIR / f"{cat}.json"
+        if not p.exists():
+            return JSONResponse({"error": "wordlist not found"}, status_code=404)
+        data = json.loads(p.read_text(encoding="utf-8"))
+        words = [w for w in data.get("words", []) if isinstance(w, str) and not w.startswith("_")]
+        nw = _mod._normalize(word)
+        if action == "add":
+            if nw and nw not in [_mod._normalize(w) for w in words]:
+                words.append(word)
+        elif action == "del":
+            words = [w for w in words if _mod._normalize(w) != nw]
+        else:
+            return JSONResponse({"error": "bad action"}, status_code=400)
+        data["words"] = words
+        p.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+        _mod._Store._inst = None  # 触发下次请求热重载
+        return {"ok": True, "category": cat, "count": len(words)}

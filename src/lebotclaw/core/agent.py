@@ -289,7 +289,7 @@ class Agent:
 
         self.memory.summarize_session(self._history)
 
-    def stream_events(self, user_input: str):
+    def stream_events(self, user_input: str, extra_system: str = ""):
         """事件流版对话：yield dict 事件，供 Web SSE 把"智能体动作"亮到前端。
 
         多轮工具循环（≤3 轮，可连环调用）→ 真流式输出最终回答；纯新增不改旧行为。
@@ -297,6 +297,7 @@ class Agent:
           {"type": "wiki", "pages": [title, ...]}              知识库命中
           {"type": "tool", "name": ..., "input": ..., "output": ..., "success": bool}
           {"type": "delta", "text": ...}                       文本片段
+        extra_system：额外拼到 system prompt 末尾的指令（内容守护用，如化解粗口）。
         """
         if not user_input.strip():
             yield {"type": "delta", "text": "请输入你的问题，我来帮你学习！"}
@@ -320,6 +321,8 @@ class Agent:
                 pass
 
         enriched_prompt = self._build_system_prompt_with_memory(user_input)
+        if extra_system:
+            enriched_prompt = enriched_prompt + "\n\n" + extra_system
         messages = [{"role": "system", "content": enriched_prompt}]
         messages.extend(self._history)
         messages.append({"role": "user", "content": user_input})

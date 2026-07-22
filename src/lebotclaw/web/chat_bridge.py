@@ -41,12 +41,38 @@ def blocking_stream_chat(ctx: SessionContext, user_input: str):
 
 
 def blocking_stream_events(ctx: SessionContext, user_input: str):
-    """事件流版：命令/路由/工具/知识库全部以 dict 事件外露（SSE 用）。
+    """事件流版：命令/路由/工具/知识库/内容守护全部以 dict 事件外露（SSE 用）。
 
-    事件类型：route（学科切换）→ wiki（知识库命中）→ tool（工具调用）→ delta（文本）。
+    事件类型：route（学科切换）→ moderation（违禁/心理命中）→ wiki → tool → delta。
     整个流程在 ``ctx.lock`` 内串行化。
+
+    内容守护双闸口：
+    - 入口闸：先查 user_input。nsfw/politics 命中→拦截（不走LLM，固定话术）；
+      mental/abuse 命中→放行，注入化解指令 + 发 moderation 事件让前端弹窗。
+    - 出口闸：聚合 delta 文本，结束后检查模型是否吐了违禁词（告警，不破坏流式）。
     """
+    from lebotclaw.core import moderation
+    from lebotclaw.web import moderation_log
+
     with ctx.lock:
+        # ── 入口闸：内容守护 ──
+        mod = moderation.check(user_input)
+        if mod.hit:
+            moderation_log.log_hit(ctx.uid, mod)
+            yield {
+                "type": "moderation",
+                "category": mod.category,
+                "severity": mod.severity,
+                "hint": mod.hint,
+                "hotline": mod.hotline,
+                "blocked": mod.blocked,
+                "high": mod.priority_high,
+            }
+            if mod.blocked:
+                # nsfw/politics：拦截，不走 LLM，固定兜底话术
+                yield {"type": "delta", "text": mod.bot_fallback}
+                return
+
         cr = handle_command(user_input, ctx)
         if cr.handled:
             yield {"type": "delta", "text": cr.text}
@@ -56,8 +82,25 @@ def blocking_stream_events(ctx: SessionContext, user_input: str):
         after = ctx.active_name()
         # 路由结果始终外露（changed 标记是否换了伙伴），前端据此亮"谁在接棒"
         yield {"type": "route", "from": before, "to": after, "changed": after != before}
-        for ev in ctx.active_agent.stream_events(user_input):
+
+        # mental/abuse 放行时，把化解指令注入 system prompt
+        extra_system = mod.bot_instruction if (mod.hit and mod.bot_instruction) else ""
+        collected = []
+        for ev in ctx.active_agent.stream_events(user_input, extra_system=extra_system):
+            if ev.get("type") == "delta":
+                collected.append(ev.get("text", ""))
             yield ev
+
+        # ── 出口闸：模型输出兜底告警（不破坏已流式输出的内容）──
+        try:
+            full = "".join(collected)
+            _safe, out_mod = moderation.check_output(full)
+            if out_mod.hit:
+                moderation_log.log_hit(ctx.uid, out_mod)
+                # 已流式发出的无法替换，但记日志；严重时前端可后续优化
+                print(f"⚠ 出口闸命中 [{out_mod.category}] words={out_mod.words}")
+        except Exception:  # noqa: BLE001
+            pass
 
 
 async def chat_and_emit(ctx: SessionContext, user_input: str) -> str:

@@ -523,6 +523,23 @@ body.hide-convlist #convList { display: none; }
   cursor: pointer; font-size: 15px; box-shadow: 0 2px 8px rgba(0,0,0,.1);
 }
 @media (max-width: 900px) { #clFab { display: none !important; } }
+/* ── 内容守护弹窗：卡通温暖，不用"违规/违禁"字眼 ── */
+#modModal { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: none;
+  align-items: center; justify-content: center; z-index: 1000; padding: 20px; }
+#modModal.show { display: flex; }
+.mod-card { background: var(--bg); border-radius: 22px; padding: 30px 26px 22px;
+  max-width: 360px; width: 100%; text-align: center; box-shadow: 0 12px 40px rgba(0,0,0,.25);
+  animation: modPop .25s ease; }
+@keyframes modPop { from { transform: scale(.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.mod-card .mod-em { font-size: 46px; line-height: 1; }
+.mod-card .mod-title { font-size: 17px; font-weight: 800; margin: 10px 0 6px; color: var(--text); }
+.mod-card .mod-desc { font-size: 13.5px; color: var(--text2); line-height: 1.65; }
+.mod-card .mod-hot { margin: 14px 0 6px; padding: 12px 10px; background: var(--panel2);
+  border-radius: 14px; font-size: 12.5px; color: var(--text2); }
+.mod-card .mod-hot b { display: block; font-size: 22px; color: var(--accent2); margin: 4px 0; letter-spacing: 1px; }
+.mod-card .mod-btn { margin-top: 14px; width: 100%; }
+.mod-warm .mod-title { color: #e8833a; }
+.mod-cool .mod-title { color: var(--accent2); }
 /* ── Agent 工作过程条：让"小博在干活"全程可见 ── */
 .stage {
   display: flex; align-items: center; gap: 7px; width: fit-content;
@@ -625,6 +642,9 @@ body.hide-convlist #convList { display: none; }
 <div id="profilePicker" class="hidden">
   <div class="ob-card" id="profileCard"></div>
 </div>
+
+<!-- 内容守护弹窗 -->
+<div id="modModal"><div class="mod-card" id="modCard"></div></div>
 
 <!-- 首次见面：称呼弹窗 -->
 <div id="onboard" class="hidden">
@@ -1048,7 +1068,11 @@ async function send() {
     if (ev.data === "[DONE]") { finish(); return; }
     try {
       const d = JSON.parse(ev.data);
-      if (d.type === "tool" || d.type === "wiki" || d.type === "route") {
+      if (d.type === "moderation") {
+        botMsg.events.push(d);
+        showModeration(d);
+        if (d.category === "mental") setStage("💛", "正在认真陪你", "认真陪");
+      } else if (d.type === "tool" || d.type === "wiki" || d.type === "route") {
         botMsg.events.push(d);
         evbox.insertAdjacentHTML("beforeend", evHtml(d));
         if (d.type === "route") {
@@ -1510,6 +1534,35 @@ async function checkProactive() {
   } catch (e) {}
 }
 setInterval(checkProactive, 5 * 60 * 1000);
+
+/* ───────── 内容守护弹窗 ───────── */
+const MOD_META = {
+  mental: { em: "💛", cls: "mod-warm" },
+  nsfw: { em: "🛡️", cls: "mod-cool" },
+  politics: { em: "🤝", cls: "mod-cool" },
+  abuse: { em: "🤗", cls: "mod-warm" },
+};
+const MOD_DESC = {
+  mental: "小博听到你了，你不是一个人。这种感受很难受，但会慢慢过去的——我会一直陪着你。",
+  nsfw: "这个话题我们还不能聊哦，换个有意思的吧～",
+  politics: "这个话题小博说不太好，可以问问老师或爸爸妈妈。",
+  abuse: "嘿，是不是遇到啥不开心的事了？骂人可解决不了问题，跟我唠唠？",
+};
+function showModeration(d) {
+  const m = MOD_META[d.category] || { em: "🤗", cls: "mod-warm" };
+  const hotline = d.hotline
+    ? `<div class="mod-hot">如果现在很难受，可以拨打<br><b>${esc(d.hotline)}</b>全国心理援助热线 · 24小时</div>` : "";
+  const card = $("#modCard");
+  card.className = "mod-card " + (m.cls || "mod-warm");
+  card.innerHTML = `
+    <div class="mod-em">${m.em}</div>
+    <div class="mod-title">${esc(d.hint || "换个话题吧")}</div>
+    <div class="mod-desc">${esc(MOD_DESC[d.category] || "换个话题继续聊吧～")}</div>
+    ${hotline}
+    <button class="btn mod-btn" id="modOk">我知道啦</button>`;
+  $("#modModal").classList.add("show");
+  $("#modOk").onclick = () => $("#modModal").classList.remove("show");
+}
 
 /* ───────── 两栏折叠（收起来只剩对话框）───────── */
 function applyCollapse() {

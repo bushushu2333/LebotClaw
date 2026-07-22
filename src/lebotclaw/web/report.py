@@ -76,6 +76,22 @@ def collect_stats(memory, user_dir: str = "~/.lebotclaw") -> dict:
     stats["quizzes_this_week"] = len(week_quizzes)
     stats["quizzes_passed"] = sum(1 for q in week_quizzes if q.get("passed"))
 
+    # 内容守护命中（本周）：mental 单独提示，其余温和计数
+    mfile = Path(user_dir).expanduser() / "moderation_log.json"
+    mental_hits = 0
+    other_flags = 0
+    if mfile.exists():
+        try:
+            for r in json.loads(mfile.read_text(encoding="utf-8")):
+                if now - r.get("ts", 0) < _WEEK:
+                    if r.get("high"):
+                        mental_hits += 1
+                    else:
+                        other_flags += 1
+        except (json.JSONDecodeError, OSError):
+            pass
+    stats["moderation"] = {"mental_hits": mental_hits, "other_flags": other_flags}
+
     return stats
 
 
@@ -83,12 +99,28 @@ def generate_report(adapter, memory, user_dir: str = "~/.lebotclaw") -> str:
     """LLM 生成周报文本（阻塞调用，需走 io_bound）。"""
     profile = memory.get_student_profile()
     stats = collect_stats(memory, user_dir)
+    prompt = _PROMPT.format(
+        name=profile.get("名字", "孩子"),
+        grade=f"（{profile['年级']}）" if profile.get("年级") else "",
+        stats=json.dumps(stats, ensure_ascii=False, indent=2),
+    )
+    # 内容守护：mental 单独温和提示家长关注情绪；其余话题温和计数
+    mod = stats.get("moderation", {})
+    if mod.get("mental_hits"):
+        prompt += (
+            f"\n\n【家长关注 · 重要】本周小博注意到孩子有 {mod['mental_hits']} 次情绪低落、"
+            "需要陪伴的时刻。请在『需要关注的地方』用关心、不指责的语气提醒家长："
+            "最近多留意孩子的情绪、多陪伴沟通、多倾听。"
+            "严禁提及具体说了什么，严禁使用'自残/自杀/心理疾病'等刺激字眼，"
+            "保护孩子的自尊与隐私——就说'情绪上需要多一些关注和陪伴'即可。"
+        )
+    if mod.get("other_flags"):
+        prompt += (
+            f"\n\n本周有 {mod['other_flags']} 次聊到不太适合的话题（小博已当场温和引导），"
+            "可在周报里轻轻带过一句即可，不必展开。"
+        )
     resp = adapter.generate(
-        messages=[{"role": "user", "content": _PROMPT.format(
-            name=profile.get("名字", "孩子"),
-            grade=f"（{profile['年级']}）" if profile.get("年级") else "",
-            stats=json.dumps(stats, ensure_ascii=False, indent=2),
-        )}],
+        messages=[{"role": "user", "content": prompt}],
         max_tokens=4096,
     )
     text = resp.content or "本周数据不足，下周再来看看吧～"
