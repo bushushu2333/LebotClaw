@@ -1,7 +1,7 @@
 from lebotclaw.tools.base import Tool, ToolResult
 from lebotclaw.tools.builtin.store import JsonListStore
 
-_SUBJECTS = {"math": "数学", "chinese": "语文", "science": "科学", "general": "通用"}
+_SUBJECTS = {"math": "数学", "chinese": "语文", "english": "英语", "science": "科学", "general": "通用"}
 
 
 class MistakeBookTool(Tool):

@@ -13,6 +13,7 @@ from lebotclaw.core.memory import MemoryStore
 SUBJECT_LABELS = {
     "math": "📐 数学小伙伴",
     "chinese": "📝 语文小伙伴",
+    "english": "🔠 英语小伙伴",
     "science": "🔬 科学小伙伴",
     "general": "🌟 万能小伙伴",
 }

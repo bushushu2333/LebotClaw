@@ -192,6 +192,7 @@ main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
 .chip.active[data-sub="math"]    { background: linear-gradient(135deg,#5eb2ff,#3d9bff); border-color: transparent; color: #fff; }
 .chip.active[data-sub="chinese"] { background: linear-gradient(135deg,#ff8fb3,#ff6b9d); border-color: transparent; color: #fff; }
 .chip.active[data-sub="science"] { background: linear-gradient(135deg,#4ed48a,#22b573); border-color: transparent; color: #fff; }
+.chip.active[data-sub="english"] { background: linear-gradient(135deg,#b18cfe,#9b5cff); border-color: transparent; color: #fff; }
 #msgs { flex: 1; overflow-y: auto; padding: 26px 0 14px; }
 .msg { display: flex; gap: 12px; padding: 6px 30px; max-width: 920px; margin: 0 auto 16px; }
 .msg .avatar {
@@ -830,7 +831,7 @@ async function refreshStatus() {
 }
 
 /* ───────── 对话 ───────── */
-const SUBJECTS = [["general","🌟 万能"],["math","📐 数学"],["chinese","📝 语文"],["science","🔬 科学"]];
+const SUBJECTS = [["general","🌟 万能"],["math","📐 数学"],["chinese","📝 语文"],["english","🔠 英语"],["science","🔬 科学"]];
 let studentName = localStorage.getItem("lc_name") || "";
 let curUid = localStorage.getItem("lc_uid") || "";
 let convs = [];
@@ -895,7 +896,7 @@ const TOOL_META = {
   calculator: ["🧮", "计算器"], dictionary: ["📖", "字典"], knowledge: ["📚", "知识库"],
   timer: ["⏱️", "计时器"], mistake_book: ["📒", "错题本"], word_bank: ["📝", "生词本"],
 };
-const SUBJECT_NAMES = { math: "数学问伴", chinese: "语文问伴", science: "科学问伴", general: "万能问伴" };
+const SUBJECT_NAMES = { math: "数学问伴", chinese: "语文问伴", english: "英语问伴", science: "科学问伴", general: "万能问伴" };
 function evHtml(ev) {
   if (ev.type === "tool") {
     const [ico, nm] = TOOL_META[ev.name] || ["🔧", ev.name];
@@ -1206,7 +1207,7 @@ async function sendPhoto(text) {
   sending = false; $("#sendBtn").disabled = false;
   $("#inp").focus();
 }
-$("#inp").addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } });
+$("#inp").addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing && e.keyCode !== 229) { e.preventDefault(); send(); } });
 $("#inp").addEventListener("input", e => { e.target.style.height = "auto"; e.target.style.height = Math.min(e.target.scrollHeight, 140) + "px"; });
 
 /* ───────── 记忆 ───────── */
@@ -1517,7 +1518,7 @@ async function submitOnboard() {
   toast(`认识你啦，${name}！🎉 你的专属空间已建好～`);
 }
 $("#obGo").onclick = submitOnboard;
-$("#obName").addEventListener("keydown", e => { if (e.key === "Enter") submitOnboard(); });
+$("#obName").addEventListener("keydown", e => { if (e.key === "Enter" && !e.isComposing && e.keyCode !== 229) submitOnboard(); });
 
 /* ───────── 超级小博主动来信 ───────── */
 async function checkProactive() {

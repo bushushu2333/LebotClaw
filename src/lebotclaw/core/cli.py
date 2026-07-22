@@ -44,6 +44,7 @@ _STYLE_OPTIONS = [
 _SUBJECT_LABELS = {
     "math": "📐 数学小伙伴",
     "chinese": "📝 语文小伙伴",
+    "english": "🔠 英语小伙伴",
     "science": "🔬 科学小伙伴",
     "general": "🌟 万能小伙伴",
 }
@@ -386,6 +387,14 @@ def create_default_registry(model_adapters=None, default_model=None, memory=None
     chinese_tools.register(_wb())
     registry.register(Agent(name="chinese", system_prompt=_make_prompt(HEADSTemplate.chinese_prompt),
         tools=chinese_tools, model_adapter=qwen_adapter, memory=shared_memory, wiki=shared_wiki, user_dir=user_dir))
+
+    # 英语
+    english_tools = ToolRegistry()
+    english_tools.register(DictionaryTool())
+    english_tools.register(KnowledgeTool())
+    english_tools.register(_wb())
+    registry.register(Agent(name="english", system_prompt=_make_prompt(HEADSTemplate.english_prompt),
+        tools=english_tools, model_adapter=qwen_adapter, memory=shared_memory, wiki=shared_wiki, user_dir=user_dir))
 
     # 科学
     science_tools = ToolRegistry()

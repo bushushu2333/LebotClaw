@@ -22,7 +22,7 @@
 
 ## Features
 
-- **Intelligent Study Companion** — 数学问伴、语文问伴、科学问伴、万能问伴，4 个学科伙伴自动路由
+- **Intelligent Study Companion** — 数学问伴、语文问伴、英语问伴、科学问伴、万能问伴，5 个学科伙伴自动路由
 - **Safe Education Memory** — SQLite 驱动的 4 类教育记忆（学生画像、学习进度、会话摘要、技能沉淀）
 - **HEADS Prompt Templates** — K-12 专属的温暖、鼓励式教学提示词，不直接给答案，引导思考
 - **Tool Calling Framework** — 统一的工具调用协议，内置计算器、字典、知识库、计时器 4 个教育工具

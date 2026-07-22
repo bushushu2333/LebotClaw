@@ -1,6 +1,6 @@
 """全局运行时：持有共享 memory / model_adapters，提供每会话 registry 工厂。
 
-多会话隔离的 linchpin：``build_registry()`` 每次调用都产出独立的 4 学科 Agent
+多会话隔离的 linchpin：``build_registry()`` 每次调用都产出独立的 5 学科 Agent
 （各自独立 ``_history``），但共享同一批 model_adapters（线程安全）与同一个
 加锁的 MemoryStore——所以"切学科/历史"按会话隔离，"学生画像/记忆"全局共享。
 """
@@ -104,7 +104,7 @@ class AppRuntime:
             return self._user_memory[uid]
 
     def build_registry(self, uid=None):
-        """每会话工厂：独立 registry（4 个 Agent 独立 _history）。
+        """每会话工厂：独立 registry（5 个 Agent 独立 _history）。
 
         uid 提供时 → per-user memory + per-user 错题/生词 store（记忆隔离）；
         uid 为空 → 全局共享（CLI 兼容 / 旧单用户）。wiki 始终全局共享。

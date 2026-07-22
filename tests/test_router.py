@@ -23,6 +23,16 @@ class TestIntentRouter:
         assert d.intent == IntentCategory.TEXT_CREATION
         assert d.target_agent == "chinese"
 
+    def test_english_qa(self):
+        d = self.router.classify("现在完成时怎么用？")
+        assert d.intent == IntentCategory.KNOWLEDGE_QA
+        assert d.target_agent == "english"
+
+    def test_english_composition(self):
+        d = self.router.classify("帮我写一篇英语作文")
+        assert d.intent == IntentCategory.TEXT_CREATION
+        assert d.target_agent == "english"
+
     def test_knowledge_qa(self):
         d = self.router.classify("什么是光合作用？")
         assert d.intent == IntentCategory.KNOWLEDGE_QA

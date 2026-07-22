@@ -38,6 +38,7 @@ class RoutingDecision:
 _SUBJECT_KEYWORDS = {
     "math": ["数学", "算", "几何", "代数", "方程", "函数", "三角", "概率", "统计", "数列"],
     "chinese": ["语文", "作文", "阅读", "写作", "古诗", "文言文", "汉字", "拼音", "修辞"],
+    "english": ["英语", "英文", "单词", "词汇", "语法", "时态", "过去时", "现在时", "将来时", "完成时", "翻译", "听力", "口语", "发音", "音标", "拼读", "完形填空", "letter", "english", "reading", "writing", "grammar", "vocabulary"],
     "science": ["科学", "物理", "化学", "生物", "实验", "地球", "生态", "力", "电", "磁", "水", "光", "热", "植物", "动物", "太阳", "磁铁"],
 }
 
@@ -153,6 +154,11 @@ class IntentRouter:
         }
 
         agent, model, tools = routing_map[intent]
+
+        if intent == IntentCategory.TEXT_CREATION:
+            # 英语写作（如"帮我写一篇英语作文"）路由到英语伙伴，其余写作仍走语文
+            if any(kw in user_input for kw in _SUBJECT_KEYWORDS["english"]):
+                agent = "english"
 
         if intent == IntentCategory.KNOWLEDGE_QA:
             agent = _detect_subject(user_input)

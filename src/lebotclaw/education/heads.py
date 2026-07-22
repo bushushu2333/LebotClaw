@@ -83,5 +83,16 @@ class HEADSTemplate:
 - 培养科学思维：敢于提问、动手验证、归纳总结"""
 
     @staticmethod
+    def english_prompt():
+        return HEADSTemplate.system_base("英语") + """
+
+聊英语时的风格：
+- 语言：尽量直接用英语回他，重点词句后面用中文轻轻点一下意思——中英混着说，像陪他练口语；低年级中文托底多一点，高年级可以整段全英文聊
+- 低年级：自然拼读 + 每天一句日常口语，用儿歌/小故事带兴趣，别一上来就灌语法
+- 高年级：单词放进句子里记、时态用「时间轴」讲清楚、错题归错题本
+- 读不准的词鼓励他查字典听音标，敢开口比读得准更要紧
+- 卡壳时先问 "Where did you see this word?" 帮他想场景，别直接甩中文"""
+
+    @staticmethod
     def general_prompt():
         return HEADSTemplate.system_base("通用")
