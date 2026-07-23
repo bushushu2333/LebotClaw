@@ -354,6 +354,19 @@ def create_default_registry(model_adapters=None, default_model=None, memory=None
     shared_memory = memory or MemoryStore()
     shared_wiki = wiki
 
+    # spec v2.1：SOUL/MEMORY（workspace）+ skill 复用（skillstore）注入全部 Agent。
+    # 同一 registry = 同一用户 → 五个学科 Agent 共享一份；构建失败不拖垮 registry。
+    shared_workspace = None
+    shared_skill_store = None
+    try:
+        from lebotclaw.core.workspace import WorkspaceFiles
+        from lebotclaw.core.skillstore import SkillStore, load_external_dirs
+        ud = user_dir or "~/.lebotclaw"
+        shared_workspace = WorkspaceFiles(base_dir=ud, uid="")
+        shared_skill_store = SkillStore(store_dir=ud, external_dirs=load_external_dirs())
+    except Exception:  # noqa: BLE001
+        pass
+
     # per-user 错题/生词 store：user_dir 提供时按用户目录隔离，否则 tool 用各自默认全局路径（CLI 兼容）
     if user_dir:
         _mb = lambda: MistakeBookTool(store=JsonListStore(f"{user_dir}/mistakes.json"))
@@ -378,7 +391,7 @@ def create_default_registry(model_adapters=None, default_model=None, memory=None
     math_tools.register(KnowledgeTool())
     math_tools.register(_mb())
     registry.register(Agent(name="math", system_prompt=_make_prompt(HEADSTemplate.math_prompt),
-        tools=math_tools, model_adapter=default_adapter, memory=shared_memory, wiki=shared_wiki, user_dir=user_dir))
+        tools=math_tools, model_adapter=default_adapter, memory=shared_memory, wiki=shared_wiki, user_dir=user_dir, workspace=shared_workspace, skill_store=shared_skill_store))
 
     # 语文
     chinese_tools = ToolRegistry()
@@ -386,7 +399,7 @@ def create_default_registry(model_adapters=None, default_model=None, memory=None
     chinese_tools.register(KnowledgeTool())
     chinese_tools.register(_wb())
     registry.register(Agent(name="chinese", system_prompt=_make_prompt(HEADSTemplate.chinese_prompt),
-        tools=chinese_tools, model_adapter=qwen_adapter, memory=shared_memory, wiki=shared_wiki, user_dir=user_dir))
+        tools=chinese_tools, model_adapter=qwen_adapter, memory=shared_memory, wiki=shared_wiki, user_dir=user_dir, workspace=shared_workspace, skill_store=shared_skill_store))
 
     # 英语
     english_tools = ToolRegistry()
@@ -394,7 +407,7 @@ def create_default_registry(model_adapters=None, default_model=None, memory=None
     english_tools.register(KnowledgeTool())
     english_tools.register(_wb())
     registry.register(Agent(name="english", system_prompt=_make_prompt(HEADSTemplate.english_prompt),
-        tools=english_tools, model_adapter=qwen_adapter, memory=shared_memory, wiki=shared_wiki, user_dir=user_dir))
+        tools=english_tools, model_adapter=qwen_adapter, memory=shared_memory, wiki=shared_wiki, user_dir=user_dir, workspace=shared_workspace, skill_store=shared_skill_store))
 
     # 科学
     science_tools = ToolRegistry()
@@ -402,7 +415,7 @@ def create_default_registry(model_adapters=None, default_model=None, memory=None
     science_tools.register(TimerTool())
     science_tools.register(_mb())
     registry.register(Agent(name="science", system_prompt=_make_prompt(HEADSTemplate.science_prompt),
-        tools=science_tools, model_adapter=default_adapter, memory=shared_memory, wiki=shared_wiki, user_dir=user_dir))
+        tools=science_tools, model_adapter=default_adapter, memory=shared_memory, wiki=shared_wiki, user_dir=user_dir, workspace=shared_workspace, skill_store=shared_skill_store))
 
     # 万能
     general_tools = ToolRegistry()
@@ -413,7 +426,7 @@ def create_default_registry(model_adapters=None, default_model=None, memory=None
     general_tools.register(_mb())
     general_tools.register(_wb())
     registry.register(Agent(name="general", system_prompt=_make_prompt(HEADSTemplate.general_prompt),
-        tools=general_tools, model_adapter=default_adapter, memory=shared_memory, wiki=shared_wiki, user_dir=user_dir))
+        tools=general_tools, model_adapter=default_adapter, memory=shared_memory, wiki=shared_wiki, user_dir=user_dir, workspace=shared_workspace, skill_store=shared_skill_store))
 
     return registry
 

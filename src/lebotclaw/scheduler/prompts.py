@@ -10,8 +10,6 @@ def build_prompt(task_type: TaskType, runtime, base_prompt: str = "") -> str:
 
     if task_type == TaskType.DAILY_REVIEW:
         return f"{ctx}请根据我的学习情况，生成一份简短的今日复习清单（3-5 条，具体可执行，语气鼓励）。{base_prompt}"
-    if task_type == TaskType.WEEKLY_SUMMARY:
-        return f"{ctx}请汇总我本周的学习进度，给出鼓励和下周建议（简短）。{base_prompt}"
     if task_type == TaskType.SPACED_REVIEW:
         weak = runtime.memory.search_memory(category="learning_progress", limit=3)
         weak_txt = "；".join(e.key for e in weak) or "暂无记录"

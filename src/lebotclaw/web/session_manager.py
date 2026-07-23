@@ -17,7 +17,8 @@ class SessionContext:
     """单个会话的运行时上下文。满足 core.commands.CommandContext 协议。"""
 
     def __init__(self, sid: str, registry: AgentRegistry, memory: MemoryStore,
-                 channel: str = "web", chat_hint: str = "", uid: str = ""):
+                 channel: str = "web", chat_hint: str = "", uid: str = "",
+                 user_dir: str = None):
         self.sid = sid
         self.uid = uid                  # 用户标识：Web 多档案隔离用（空=全局/CLI）
         self.registry = registry
@@ -25,9 +26,40 @@ class SessionContext:
         self.memory = memory
         self.channel = channel          # "web" | "feishu"
         self.chat_hint = chat_hint      # 飞书 chat_id 等
+        self.user_dir = user_dir        # per-user 目录（spec v2.1：SOUL/MEMORY/skills/flow 落盘根）
         self.lock = threading.RLock()   # 串行化本会话的 chat（Agent.chat 非原子）
         self.created_at = time.time()
         self._active_name = "general"
+        self._flow_engine = None
+        self._workspace = None
+        self._skill_store = None
+
+    @property
+    def workspace(self):
+        """spec 2.11：SOUL.md / MEMORY.md / companion.json（懒加载，首次访问即确保 SOUL 存在）。"""
+        if self._workspace is None:
+            from lebotclaw.core.workspace import WorkspaceFiles
+            ud = self.user_dir or "~/.lebotclaw"
+            self._workspace = WorkspaceFiles(base_dir=ud, uid="")
+        return self._workspace
+
+    @property
+    def skill_store(self):
+        """spec 2.1：per-user SKILL.md 文件包存储（懒加载）。"""
+        if self._skill_store is None:
+            from lebotclaw.core.skillstore import SkillStore
+            ud = self.user_dir or "~/.lebotclaw"
+            self._skill_store = SkillStore(store_dir=ud)
+        return self._skill_store
+
+    @property
+    def flow_engine(self):
+        """spec 1.1：每会话一个 FlowEngine（active_run 状态随会话隔离）。"""
+        if self._flow_engine is None:
+            from lebotclaw.core.flow import FlowEngine
+            self._flow_engine = FlowEngine(
+                router=self.router, user_dir=self.user_dir or "~/.lebotclaw")
+        return self._flow_engine
 
     @property
     def active_agent(self) -> Agent:
@@ -80,7 +112,8 @@ class SessionManager:
             if not sid or sid not in self._sessions:
                 sid = sid or str(uuid.uuid4())
                 memory = self.rt.memory_for(uid) if uid else self.rt.memory
-                ctx = SessionContext(sid, self.rt.build_registry(uid), memory, channel, chat_hint, uid)
+                ctx = SessionContext(sid, self.rt.build_registry(uid), memory, channel, chat_hint, uid,
+                                     user_dir=self.rt.user_dir_for(uid) if uid else None)
                 self._sessions[sid] = ctx
                 if channel != "web" and chat_hint:
                     self._channel_map[f"{channel}:{chat_hint}"] = sid

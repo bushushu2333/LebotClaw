@@ -8,7 +8,7 @@ from typing import Optional
 
 class TaskType(str, Enum):
     DAILY_REVIEW = "daily_review"        # 每日复习清单（跑 agent）
-    WEEKLY_SUMMARY = "weekly_summary"    # 每周学情周报（跑 agent）
+    WEEKLY_SUMMARY = "weekly_summary"    # 已下线（家长周报功能砍除），保留枚举仅为兼容存量 job 数据
     SPACED_REVIEW = "spaced_review"      # 间隔复习（针对薄弱点，跑 agent）
     PUSH_REMINDER = "push_reminder"      # 纯文本提醒（不跑 LLM，直接推）
     CUSTOM_PROMPT = "custom_prompt"      # 自定义提示（跑 agent）

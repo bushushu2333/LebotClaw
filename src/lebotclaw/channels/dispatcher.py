@@ -1,10 +1,11 @@
 """统一消息分发：收消息 → 去重 → 会话绑定 → 对话 → 回复。
 
 飞书等 IM 通道在后台线程收到消息后调 ``Dispatcher.handle``。
-blocking_chat 已含命令分流 + 路由 + agent.chat，此处只做通道层编排。
+collapse_events_to_text 已含命令分流 + 路由 + 事件流折叠（Flow 痕迹透传），
+此处只做通道层编排。
 """
 from lebotclaw.channels.base import ChatChannel, IncomingMessage, PushTarget
-from lebotclaw.web.chat_bridge import blocking_chat
+from lebotclaw.web.chat_bridge import collapse_events_to_text
 
 
 class Dispatcher:
@@ -31,9 +32,9 @@ class Dispatcher:
         if self.rt.channels:
             self.rt.channels.set_default_target(msg.channel, target)
 
-        # 4. 跑对话（含命令分流 + 路由 + agent.chat，保工具+记忆）
+        # 4. 跑对话（事件流折叠成文本：Flow/Skill/陪伴痕迹透传到纯文本通道，spec 1.9）
         try:
-            reply = blocking_chat(ctx, msg.text)
+            reply = collapse_events_to_text(ctx, msg.text)
         except Exception as e:  # noqa: BLE001
             reply = f"⚠ 出了点问题：{e}"
 
