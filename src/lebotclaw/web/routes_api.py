@@ -9,6 +9,7 @@ from fastapi import Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from nicegui import app
 
+from lebotclaw.core.skillstore import VALID_CATEGORIES
 from lebotclaw.web.chat_bridge import api_chat, blocking_stream_chat, blocking_stream_events
 
 def _clean_tts_text(text: str) -> str:
@@ -240,51 +241,6 @@ def register_api_routes(runtime):
             }
         return {"memory": await run.io_bound(_load)}
 
-    @app.get("/api/starmap")
-    async def starmap(uid: str = ""):
-        """知识星图：知识页=星星（聊过的点亮）、已掌握错题=金星。"""
-        from lebotclaw.tools.builtin.store import JsonListStore
-        d = ud(uid)
-        covered: dict = {}
-        for c in JsonListStore(f"{d}/covered.json").all():
-            t = c.get("title", "")
-            if t:
-                covered[t] = covered.get(t, 0) + 1
-        stars = [
-            {"title": p.title, "covered": covered.get(p.title, 0) > 0, "hits": covered.get(p.title, 0)}
-            for p in runtime.wiki.list_pages()
-        ]
-        gold = [
-            {"title": i.get("question", "")[:24], "note": i.get("note", "")[:30]}
-            for i in JsonListStore(f"{d}/mistakes.json").all()
-            if i.get("mastered")
-        ]
-        return {"stars": stars, "gold": gold,
-                "covered_count": sum(1 for s in stars if s["covered"])}
-
-    @app.get("/api/report/weekly")
-    async def report_weekly(uid: str = ""):
-        """家长周报：有缓存先返回缓存（带上 stats 供页面渲染）。"""
-        from lebotclaw.web import report as report_mod
-        d = ud(uid)
-        cached = report_mod.cached_report(d)
-        if not cached:
-            return {"report": None, "stats": report_mod.collect_stats(mem(uid), d)}
-        return {"report": cached["text"], "generated_at": cached["generated_at"], "stats": cached.get("stats", {})}
-
-    @app.post("/api/report/weekly/refresh")
-    async def report_weekly_refresh(uid: str = ""):
-        """重新生成周报（LLM 阻塞调用走 io_bound）。"""
-        from nicegui import run
-        from lebotclaw.web import report as report_mod
-        d = ud(uid)
-        adapter = runtime.model_adapters.get(runtime.default_model)
-        if adapter is None:
-            return JSONResponse({"error": "no model"}, status_code=503)
-        text = await run.io_bound(report_mod.generate_report, adapter, mem(uid), d)
-        cached = report_mod.cached_report(d) or {}
-        return {"report": text, "generated_at": cached.get("generated_at"), "stats": cached.get("stats", {})}
-
     @app.post("/api/quiz/generate")
     async def quiz_generate(request: Request, uid: str = ""):
         """按错题生成专属选择题（LLM 出题，走 io_bound 不阻塞事件循环）。"""
@@ -366,6 +322,294 @@ def register_api_routes(runtime):
         from lebotclaw.web.proactive import pending_messages
         return {"messages": pending_messages(mem(uid), consume=consume, user_dir=ud(uid))}
 
+    # ── 技能图鉴（spec FR-S6 / FR-V3）：SKILL.md 文件包 CRUD ──
+    # SkillStore 按 uid 缓存：__init__ 会扫外部挂载目录重建索引，
+    # 每请求新建一次 = 挂载外部目录后每次 API 调用都全量重扫。
+    _skill_stores: dict = {}
+
+    def skill_store(uid: str):
+        from lebotclaw.core.skillstore import SkillStore, load_external_dirs
+        if uid not in _skill_stores:
+            _skill_stores[uid] = SkillStore(
+                store_dir=ud(uid), external_dirs=load_external_dirs())
+        return _skill_stores[uid]
+
+    def _skill_card(e: dict) -> dict:
+        return {
+            "slug": e.get("slug", ""),
+            "title": e.get("title", e.get("name", "")),
+            "category": e.get("category", "task_flow"),
+            "status": e.get("status", "active"),
+            "source": e.get("source", "internal"),
+            "effectiveness": e.get("effectiveness", 0.0),
+            "usage_count": e.get("usage_count", 0),
+            "parent_note": e.get("parent_note", ""),
+            "version": e.get("version", "1.0.0"),
+        }
+
+    @app.get("/api/skills")
+    async def skills_list(uid: str = "", status: str = ""):
+        """图鉴卡片列表（索引读，不含正文）。"""
+        from nicegui import run
+        items = await run.io_bound(skill_store(uid).list, status)
+        return {"skills": [_skill_card(e) for e in items]}
+
+    @app.get("/api/skills/{slug}")
+    async def skills_detail(slug: str, uid: str = ""):
+        """详情抽屉：SKILL.md 全文 + 复用档案（成长日记数据源）。"""
+        from nicegui import run
+        store = skill_store(uid)
+        entry = await run.io_bound(store.get, slug)
+        if not entry:
+            return JSONResponse({"error": "skill not found"}, status_code=404)
+        import json as _json
+        from pathlib import Path as _P
+        log_path = _P(ud(uid)) / "skills" / slug / "usage_log.jsonl"
+        usage_log = []
+        if log_path.exists():
+            for line in log_path.read_text(encoding="utf-8").splitlines():
+                try:
+                    usage_log.append(_json.loads(line))
+                except _json.JSONDecodeError:
+                    pass
+        card = _skill_card({**entry, "slug": slug})
+        card["body"] = entry.get("body", "")
+        card["usage_log"] = usage_log[-50:]
+        return card
+
+    @app.post("/api/skills")
+    async def skills_create(request: Request, uid: str = ""):
+        """手动新建（frontmatter 表单 + Markdown 正文）。"""
+        from nicegui import run
+        payload = await request.json()
+        title = (payload.get("title") or "").strip()
+        body = (payload.get("body") or "").strip()
+        if not title or not body:
+            return JSONResponse({"error": "title/body required"}, status_code=400)
+        slug = await run.io_bound(skill_store(uid).add, {
+            "title": title, "body": body,
+            "category": payload.get("category", "task_flow"),
+            "trigger": payload.get("trigger", ""),
+            "parent_note": payload.get("parent_note", ""),
+        })
+        return {"ok": True, "slug": slug}
+
+    @app.post("/api/skills/from-md")
+    async def skills_from_md(request: Request, uid: str = ""):
+        """上传/粘贴一个 SKILL.md 全文：自动解析 frontmatter 入库。
+        可直接复用 Claude Code / OpenClaw 的 SKILL.md（无 frontmatter 也兼容，按文件名建条目）。"""
+        from nicegui import run
+        from lebotclaw.core.skillstore import parse_frontmatter
+        payload = await request.json()
+        md_text = (payload.get("md") or "").strip()
+        if not md_text:
+            return JSONResponse({"error": "md required"}, status_code=400)
+        fm, body = parse_frontmatter(md_text)
+        filename = (payload.get("filename") or "").strip()
+        title = str(fm.get("title") or fm.get("name") or filename).strip()
+        if not title:
+            return JSONResponse(
+                {"error": "frontmatter 缺 title/name，且无文件名可兜底"}, status_code=400
+            )
+        cat = fm.get("category")
+        skill = {
+            "title": title,
+            "body": body or md_text,
+            "trigger": fm.get("trigger") or fm.get("description") or "",
+            "category": cat if cat in VALID_CATEGORIES else "task_flow",
+            # source 用 internal：导入后即本地可编辑副本（ext- 挂载的外部目录才是只读）。
+            # 来源信息记到 parent_note，卡片上能看到"从哪来的"。
+            "parent_note": fm.get("parent_note")
+            or (f"📥 从文件导入（{filename}）" if filename else "📥 从文件导入"),
+        }
+        slug = await run.io_bound(skill_store(uid).add, skill)
+        return {"ok": True, "slug": slug, "parsed": bool(fm), "title": title}
+
+    @app.post("/api/skills/{slug}/update")
+    async def skills_update(slug: str, request: Request, uid: str = ""):
+        """编辑（标题/正文/trigger/说明等字段，只允许白名单字段）。"""
+        from nicegui import run
+        payload = await request.json()
+        allowed = {"title", "body", "category", "trigger", "parent_note", "status"}
+        fields = {k: v for k, v in payload.items() if k in allowed}
+        if not fields:
+            return JSONResponse({"error": "nothing to update"}, status_code=400)
+        ok = await run.io_bound(skill_store(uid).update_fields, slug, **fields)
+        return {"ok": ok}
+
+    @app.post("/api/skills/{slug}/optimize")
+    async def skills_optimize(slug: str, request: Request, uid: str = ""):
+        """✨ 小博化：用 LLM 把 skill 改写成"小博能用、小朋友能懂、步骤能落地"的版本。
+        不改变原意（学习/玩/生活一视同仁，不硬往教学上靠）。原版存 versions/ 可回滚。"""
+        from nicegui import run
+        import time as _t
+        from pathlib import Path as _P
+        store = skill_store(uid)
+        entry = await run.io_bound(store.get, slug)
+        if not entry:
+            return JSONResponse({"error": "skill not found"}, status_code=404)
+        if str(slug).startswith("ext-"):
+            return JSONResponse({"error": "外部只读 skill，请先复制为本地副本"}, status_code=400)
+        adapter = runtime.model_adapters.get(runtime.default_model)
+        if not adapter:
+            return JSONResponse({"error": "还没配置模型，小博没法干活"}, status_code=503)
+        try:
+            payload = await request.json()
+        except Exception:
+            payload = {}
+        grade_hint = (payload.get("grade") or "").strip()
+        orig_body = entry.get("body", "")
+
+        def _do():
+            sys_msg = (
+                "你是超级小博，15岁男孩。把下面这份'本领说明'改写成你自己真的能用、"
+                "小朋友也听得懂、步骤能直接照着做的版本。要求：用你爽朗口语的口吻（别说明书腔）；"
+                "对小朋友友好（用词简单、多打比方）；步骤具体可执行；"
+                "保持这个本领原本要做的事不变——不管它是学习、玩游戏还是生活小事，一视同仁，"
+                "别硬往'教学'上靠；直接输出改写后的 Markdown 正文，不要多余解释。"
+            )
+            user_msg = (
+                f"本领名称：{entry.get('title', '')}\n"
+                + (f"（对方是{grade_hint}的同学）\n" if grade_hint else "")
+                + f"\n原始内容：\n{orig_body}\n\n请改写。"
+            )
+            resp = adapter.generate(
+                messages=[{"role": "system", "content": sys_msg},
+                          {"role": "user", "content": user_msg}],
+                temperature=0.7, max_tokens=2048,
+            )
+            return (resp.content or "").strip()
+
+        new_body = await run.io_bound(_do)
+        if not new_body:
+            return JSONResponse({"error": "小博这次没想出来，稍后再试"}, status_code=500)
+        ver_dir = _P(ud(uid)) / "skills" / slug / "versions"
+        ver_dir.mkdir(parents=True, exist_ok=True)
+        (ver_dir / f"v{int(_t.time())}.md").write_text(orig_body, encoding="utf-8")
+        await run.io_bound(store.update_fields, slug, body=new_body)
+        return {"ok": True, "before": len(orig_body), "after": len(new_body)}
+
+    @app.post("/api/skills/{slug}/clone")
+    async def skills_clone(slug: str, uid: str = ""):
+        """把外部只读 skill（ext- 挂载的 Claude Code/OpenClaw skill）复制为本地可编辑副本。"""
+        from nicegui import run
+        store = skill_store(uid)
+        entry = await run.io_bound(store.get, slug)
+        if not entry:
+            return JSONResponse({"error": "skill not found"}, status_code=404)
+        if not str(slug).startswith("ext-"):
+            return JSONResponse({"error": "这不是外部 skill，无需复制"}, status_code=400)
+        cat = entry.get("category")
+        skill = {
+            "title": entry.get("title") or entry.get("name") or slug,
+            "body": entry.get("body", ""),
+            "trigger": entry.get("trigger") or entry.get("description") or "",
+            "category": cat if cat in VALID_CATEGORIES else "task_flow",
+            "parent_note": "📥 从 Claude Code/OpenClaw 复制为可编辑副本",
+        }
+        new_slug = await run.io_bound(store.add, skill)
+        return {"ok": True, "slug": new_slug, "title": skill["title"]}
+
+    @app.get("/api/skills/sources")
+    async def skills_sources(uid: str = ""):
+        """列出已挂载的外部 skill 目录（Claude Code/OpenClaw）+ 各目录扫到的 skill 数。"""
+        from nicegui import run
+        from collections import Counter
+        from lebotclaw.core.skillstore import load_external_dirs
+        from pathlib import Path as _P
+        dirs = load_external_dirs()
+        store = skill_store(uid)
+        items = await run.io_bound(store.list)
+        cnt = Counter()
+        for it in items:
+            ep = it.get("ext_path")
+            if ep:
+                cnt[ep] += 1
+        result = []
+        for d in dirs:
+            dp = str(_P(d).expanduser())
+            result.append({"dir": d, "exists": _P(dp).is_dir(), "count": cnt.get(dp, 0)})
+        total_ext = sum(1 for it in items if str(it.get("slug", "")).startswith("ext-"))
+        return {"sources": result, "external_total": total_ext}
+
+    @app.post("/api/skills/sources")
+    async def skills_sources_add(request: Request):
+        """添加一个外部 skill 目录（写入 ~/.lebotclaw/config.json 的 skills.external_dirs）。
+        下次请求即生效（skill_store 每次都重新读 config）。"""
+        import json as _json
+        from pathlib import Path as _P
+        payload = await request.json()
+        new_dir = (payload.get("dir") or "").strip()
+        if not new_dir:
+            return JSONResponse({"error": "dir required"}, status_code=400)
+        cfg_path = _P("~/.lebotclaw/config.json").expanduser()
+        cfg = {}
+        if cfg_path.exists():
+            try:
+                cfg = _json.loads(cfg_path.read_text(encoding="utf-8"))
+            except _json.JSONDecodeError:
+                cfg = {}
+        dirs = cfg.setdefault("skills", {}).setdefault("external_dirs", [])
+        expanded = str(_P(new_dir).expanduser())
+        if expanded not in dirs:
+            dirs.append(expanded)
+        cfg_path.parent.mkdir(parents=True, exist_ok=True)
+        cfg_path.write_text(_json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")
+        return {"ok": True, "dirs": cfg["skills"]["external_dirs"]}
+
+    @app.post("/api/skills/{slug}/toggle")
+    async def skills_toggle(slug: str, uid: str = ""):
+        """停用/启用（active ↔ deprecated）。"""
+        from nicegui import run
+        store = skill_store(uid)
+        entry = await run.io_bound(store.get, slug)
+        if not entry:
+            return JSONResponse({"error": "skill not found"}, status_code=404)
+        new = "deprecated" if entry.get("status", "active") == "active" else "active"
+        await run.io_bound(store.update_fields, slug, status=new)
+        return {"ok": True, "status": new}
+
+    @app.delete("/api/skills/{slug}")
+    async def skills_delete(slug: str, uid: str = ""):
+        from nicegui import run
+        ok = await run.io_bound(skill_store(uid).delete, slug)
+        return {"ok": ok}
+
+    @app.post("/api/skills/{slug}/undo")
+    async def skills_undo(slug: str, uid: str = ""):
+        """撤销自动沉淀：删除 + 写入 skill_undos.json 黑名单（同场景 30 天不再自动沉淀）。"""
+        import time as _t
+        from nicegui import run
+        store = skill_store(uid)
+        entry = await run.io_bound(store.get, slug)
+        if not entry:
+            return JSONResponse({"error": "skill not found"}, status_code=404)
+        trigger = entry.get("trigger") or entry.get("title", "")
+        await run.io_bound(store.delete, slug)
+        import json as _json
+        from pathlib import Path as _P
+        undo_path = _P(ud(uid)) / "skill_undos.json"
+        undos = {}
+        if undo_path.exists():
+            try:
+                undos = _json.loads(undo_path.read_text(encoding="utf-8"))
+            except _json.JSONDecodeError:
+                undos = {}
+        undos[trigger] = _t.time()
+        # 顺带清理 30 天前的黑名单条目
+        undos = {k: v for k, v in undos.items() if _t.time() - v < 30 * 86400}
+        undo_path.write_text(_json.dumps(undos, ensure_ascii=False, indent=2), encoding="utf-8")
+        return {"ok": True, "blacklisted": trigger}
+
+    @app.get("/api/companion")
+    async def companion(uid: str = ""):
+        """陪伴档案：「陪伴小主人第 N 天 · 一起聊过 X token」（spec FR-E7）。"""
+        from nicegui import run
+        from lebotclaw.core.workspace import WorkspaceFiles
+        # uid="" 表示文件直接落在该用户目录（SOUL.md/MEMORY.md/companion.json）
+        ws = WorkspaceFiles(base_dir=ud(uid), uid="")
+        return await run.io_bound(ws.companion_stats)
+
     @app.get("/api/mistakes")
     async def mistakes_list(uid: str = ""):
         """错题本列表（记忆页页签用），未掌握在前。"""
@@ -407,22 +651,6 @@ def register_api_routes(runtime):
     async def wiki_del(page_id: str):
         runtime.wiki.delete_page(page_id)
         return {"deleted": page_id}
-
-    @app.post("/api/plan")
-    async def make_plan(request: Request, uid: str = ""):
-        from nicegui import run
-        from lebotclaw.core.planner import Planner
-        payload = await request.json()
-        goal = (payload.get("goal") or "").strip()
-        if not goal:
-            return JSONResponse({"error": "goal required"}, status_code=400)
-        grade = (mem(uid).get_student_profile().get("年级", "") if uid else runtime.config.get("grade", ""))
-        plan = await run.io_bound(Planner().decompose, goal, "", grade)
-        return {"goal": goal, "steps": [
-            {"id": s.id, "title": s.title, "description": s.description,
-             "status": s.status}
-            for s in plan.steps
-        ]}
 
     @app.get("/api/profile")
     async def profile_get(uid: str = ""):

@@ -156,6 +156,103 @@ main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
 }
 #sbToggle:hover { color: var(--accent2); border-color: var(--accent); }
 #themeBtn:hover { color: var(--accent2); border-color: var(--accent); transform: scale(1.05); }
+
+/* ── 小博声音开关：看得见开/关的滑动开关 ── */
+.voice-toggle {
+  display: flex; align-items: center; gap: 7px;
+  border: 1.5px solid var(--border2); background: var(--panel); color: var(--text2);
+  border-radius: 999px; padding: 4px 11px 4px 13px;
+  font-size: 12.5px; font-weight: 600; cursor: pointer; user-select: none;
+  transition: all .15s; line-height: 1;
+}
+.voice-toggle:hover { border-color: var(--accent); }
+.vt-text { line-height: 1; }
+.vt-state { font-size: 10.5px; font-weight: 700; opacity: .55; line-height: 1; }
+.vt-switch {
+  position: relative; width: 34px; height: 19px;
+  background: var(--border2); border-radius: 999px; flex-shrink: 0;
+  transition: background .25s;
+}
+.vt-knob {
+  position: absolute; top: 2px; left: 2px;
+  width: 15px; height: 15px; background: #fff; border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0,0,0,.35);
+  transition: transform .25s;
+}
+/* 开启态：轨道变主题橙、圆点右滑、文字提亮 */
+.voice-toggle.on { color: var(--accent2); border-color: var(--accent); background: var(--hover); }
+.voice-toggle.on .vt-state { color: var(--accent2); opacity: 1; }
+.voice-toggle.on .vt-switch { background: var(--accent); }
+.voice-toggle.on .vt-knob { transform: translateX(15px); }
+
+/* ── 陪伴徽章（页头）：陪伴第 N 天 · 一起聊过 X token ── */
+.companion-chip {
+  font-size: 12px; font-weight: 600; color: var(--text2);
+  border: 1.5px solid var(--border2); border-radius: 999px;
+  padding: 4px 11px; background: var(--panel); white-space: nowrap;
+}
+
+/* ── Flow 卡（闯关 / 步骤树 双模式共用 DOM，class 切换） ── */
+.flowcard { border: 1.5px solid var(--border2); border-radius: 14px; background: var(--panel); margin: 6px 0; overflow: hidden; }
+.flowcard .fc-head { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px dashed var(--border2); font-size: 13px; font-weight: 700; }
+.flowcard .fc-goal { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.flowcard .fc-mode { border: 1px solid var(--border2); background: none; color: var(--text2); border-radius: 999px; font-size: 11px; padding: 2px 9px; cursor: pointer; }
+.flowcard .fc-mode:hover { border-color: var(--accent); color: var(--accent2); }
+.flowcard .fc-body { padding: 10px 12px; }
+.flowcard .fc-foot { padding: 8px 12px; font-size: 12.5px; color: var(--text2); border-top: 1px dashed var(--border2); }
+.flowcard.fc-done .fc-foot { color: var(--accent2); font-weight: 600; }
+/* 闯关模式：横向关卡格 */
+.flowcard.mode-quest .fc-nodes { display: flex; gap: 6px; flex-wrap: wrap; }
+.flowcard.mode-quest .fc-node { flex: 1; min-width: 90px; text-align: center; border: 1.5px solid var(--border2); border-radius: 12px; padding: 9px 6px; font-size: 12px; color: var(--text2); background: var(--bg); transition: all .25s; }
+.flowcard.mode-quest .fc-node .qn-ico { font-size: 20px; display: block; margin-bottom: 3px; filter: grayscale(1); opacity: .5; }
+.flowcard.mode-quest .fc-node.st-running { border-color: var(--accent); color: var(--text); box-shadow: 0 0 0 3px var(--hover); transform: translateY(-2px); }
+.flowcard.mode-quest .fc-node.st-running .qn-ico { filter: none; opacity: 1; animation: bob 1s infinite alternate; }
+.flowcard.mode-quest .fc-node.st-done { border-color: var(--ok, #22c55e); color: var(--text); }
+.flowcard.mode-quest .fc-node.st-done .qn-ico { filter: none; opacity: 1; }
+.flowcard.mode-quest .fc-node.st-inserted { border-style: dashed; border-color: #f59e0b; }
+.flowcard.mode-quest .fc-tools { font-size: 11px; margin-top: 4px; opacity: .8; }
+@keyframes bob { from { transform: translateY(0); } to { transform: translateY(-3px); } }
+.flowcard .fc-stars { text-align: center; font-size: 15px; letter-spacing: 3px; margin-top: 8px; }
+.flowcard.mode-quest .tn-st { display: none; }
+.flowcard.mode-tree .qn-ico { display: none; }
+.flowcard.mode-tree .qn-cell { flex: 1; }
+/* 步骤树模式：竖向节点 */
+.flowcard.mode-tree .fc-nodes { display: flex; flex-direction: column; gap: 0; }
+.flowcard.mode-tree .fc-node { display: flex; align-items: flex-start; gap: 9px; padding: 7px 2px 7px 4px; border-left: 3px solid var(--border2); margin-left: 8px; padding-left: 12px; font-size: 13px; color: var(--text2); }
+.flowcard.mode-tree .fc-node.st-running { border-left-color: var(--accent); color: var(--text); font-weight: 600; }
+.flowcard.mode-tree .fc-node.st-done { border-left-color: var(--ok, #22c55e); color: var(--text); }
+.flowcard.mode-tree .fc-node.st-skipped { opacity: .55; text-decoration: line-through; }
+.flowcard.mode-tree .fc-node.st-inserted { border-left-style: dashed; border-left-color: #f59e0b; }
+.flowcard.mode-tree .fc-node .tn-st { font-size: 12px; flex-shrink: 0; width: 18px; text-align: center; }
+.flowcard.mode-tree .fc-tools { font-size: 11.5px; margin-top: 2px; opacity: .85; }
+/* 技能事件卡 */
+.ev-skill { border: 1.5px dashed var(--accent); border-radius: 12px; padding: 8px 12px; margin: 6px 0; font-size: 13px; background: var(--hover); }
+.ev-skill .esk-act { margin-left: 8px; font-size: 11.5px; border: 1px solid var(--border2); background: var(--panel); color: var(--text2); border-radius: 999px; padding: 2px 10px; cursor: pointer; }
+.ev-skill .esk-act:hover { border-color: var(--accent); color: var(--accent2); }
+/* 技能图鉴页 */
+.skills-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+.skills-tabs { display: flex; gap: 6px; }
+.skills-tabs button { border: 1.5px solid var(--border2); background: var(--panel); color: var(--text2); border-radius: 999px; padding: 5px 14px; font-size: 12.5px; cursor: pointer; }
+.skills-tabs button.active { border-color: var(--accent); color: var(--accent2); font-weight: 700; }
+.skill-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
+.skill-card { border: 1.5px solid var(--border2); border-radius: 14px; background: var(--panel); padding: 13px 14px; cursor: pointer; transition: all .15s; }
+.skill-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+.skill-card.retired { opacity: .5; }
+.skill-card .sc-title { font-weight: 700; font-size: 14px; margin-bottom: 4px; }
+.skill-card .sc-meta { font-size: 11.5px; color: var(--text2); display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 7px; }
+.skill-card .sc-src { border: 1px solid var(--border2); border-radius: 999px; padding: 0 7px; font-size: 10.5px; }
+.skill-card .sc-note { font-size: 12px; color: var(--text2); line-height: 1.5; margin-bottom: 8px; }
+.skill-card .sc-bar { height: 6px; border-radius: 999px; background: var(--border2); overflow: hidden; }
+.skill-card .sc-bar i { display: block; height: 100%; background: var(--accent); border-radius: 999px; }
+.skill-card .sc-foot { font-size: 11px; color: var(--text2); margin-top: 5px; display: flex; justify-content: space-between; }
+.skill-drawer-mask { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 90; }
+.skill-drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(480px, 92vw); background: var(--bg); border-left: 1.5px solid var(--border2); z-index: 91; overflow-y: auto; padding: 18px; }
+.skill-drawer h3 { margin: 0 0 4px; }
+.skill-drawer .sd-sec { margin-top: 14px; }
+.skill-drawer .sd-sec h4 { font-size: 13px; margin: 0 0 6px; color: var(--accent2); }
+.skill-drawer .sd-body { font-size: 13px; line-height: 1.7; border: 1px solid var(--border2); border-radius: 10px; padding: 10px 12px; background: var(--panel); }
+.skill-drawer .sd-log { font-size: 12px; color: var(--text2); line-height: 1.8; }
+.skill-drawer .sd-actions { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
 .view { flex: 1; overflow-y: auto; min-height: 0; }
 .hidden { display: none !important; }
 
@@ -393,40 +490,6 @@ main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
 .quiz-opt.miss { border-color: var(--red); background: rgba(239,83,80,.12); }
 .quiz-q .qq-explain { font-size: 12px; color: var(--text2); margin-top: 8px; border-top: 1.5px dashed var(--border); padding-top: 6px; }
 .quiz-result { font-size: 13px; font-weight: 800; color: var(--accent2); text-align: center; padding: 4px; }
-/* 周报统计瓦片 */
-.stat-tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 16px; }
-.stat-tile {
-  background: var(--panel); border: 1.5px solid var(--border); border-radius: 16px;
-  padding: 12px; text-align: center; box-shadow: var(--shadow);
-}
-.stat-tile .st-ico { font-size: 22px; }
-.stat-tile .st-k { font-size: 11.5px; color: var(--text3); font-weight: 700; margin-top: 2px; }
-.stat-tile .st-v { font-size: 17px; font-weight: 800; color: var(--accent2); margin-top: 2px; }
-.stat-tile .st-sub { font-size: 11px; color: var(--text3); margin-top: 2px; }
-.report-body { font-size: 14px; line-height: 1.8; color: var(--text); }
-.report-body h1, .report-body h2, .report-body h3 { font-size: 15px; margin: 10px 0 4px; }
-/* 知识星空 */
-.starfield {
-  position: relative; height: 420px; border-radius: 16px; overflow: hidden;
-  background: radial-gradient(ellipse at 30% 20%, #1b2451 0%, #0d1230 55%, #070a1e 100%);
-}
-.star {
-  position: absolute; width: 7px; height: 7px; border-radius: 50%;
-  background: #5a6489; opacity: .55; cursor: default; transform: translate(-50%, -50%);
-}
-.star.lit {
-  background: #ffd76a; opacity: 1;
-  box-shadow: 0 0 10px 3px rgba(255, 215, 106, .55), 0 0 24px 8px rgba(255, 215, 106, .2);
-  animation: twinkle 2.6s ease-in-out infinite;
-}
-.star.gold {
-  background: none; opacity: 1; color: #ffb52e; font-size: 17px; width: auto; height: auto;
-  text-shadow: 0 0 10px rgba(255, 181, 46, .8), 0 0 22px rgba(255, 181, 46, .4);
-  animation: twinkle 3.2s ease-in-out infinite;
-}
-.star.demo { position: static; display: inline-block; transform: none; vertical-align: middle; margin-right: 4px; }
-@keyframes twinkle { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(1.45); } }
-.star-legend { display: flex; gap: 18px; font-size: 12px; color: var(--text2); margin-top: 10px; flex-wrap: wrap; }
 .empty { color: var(--text3); font-size: 12.5px; padding: 6px 0; }
 input[type=text], textarea, select {
   width: 100%; background: var(--bg2); border: 2px solid var(--border2); border-radius: 12px;
@@ -452,16 +515,6 @@ label.f { display: block; font-size: 12.5px; font-weight: 700; color: var(--text
 .wiki-item .src { font-size: 11.5px; color: var(--text3); }
 .wiki-item .snippet { font-size: 13px; color: var(--text2); }
 .tag { font-size: 11px; border: 1.5px solid var(--border2); border-radius: 999px; padding: 1px 9px; color: var(--text3); font-weight: 600; }
-.step { display: flex; gap: 13px; padding: 12px 0; border-top: 1.5px dashed var(--border); }
-.step:first-of-type { border-top: 0; }
-.step .num {
-  width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
-  background: var(--accent-grad); color: #fff;
-  display: grid; place-items: center; font-size: 13px; font-weight: 800;
-  box-shadow: var(--shadow-accent);
-}
-.step .tt { font-weight: 700; font-size: 14px; }
-.step .dd { color: var(--text2); font-size: 12.5px; }
 .job-row { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-top: 1.5px dashed var(--border); font-size: 13.5px; }
 .job-row:first-of-type { border-top: 0; }
 .job-row .nm { flex: 1; min-width: 0; }
@@ -487,6 +540,28 @@ label.f { display: block; font-size: 12.5px; font-weight: 700; color: var(--text
 .profile-card .pe { font-size: 32px; }
 .profile-card .pn { font-size: 14px; font-weight: 700; margin-top: 6px; color: var(--text); }
 #profileBtn { font-size: 16px; }
+/* 顶栏身份胶囊：圆头像 + 名字（2026-07-23 哥哥嫌方形框丑重设计） */
+.profile-chip {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 3px 12px 3px 3px; border-radius: 999px;
+  background: linear-gradient(135deg, #e0f2fe, #ede9fe);
+  border: 2px solid #7dd3fc;
+  box-shadow: 0 2px 8px rgba(56,189,248,.25);
+  cursor: pointer; transition: all .18s;
+}
+.profile-chip:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(56,189,248,.4); border-color: #38bdf8; }
+.profile-chip .pc-avatar {
+  width: 28px; height: 28px; border-radius: 50%; overflow: hidden;
+  background: #fff; display: inline-flex; align-items: center; justify-content: center;
+  font-size: 17px; flex-shrink: 0; border: 1.5px solid #bae6fd;
+}
+.profile-chip .pc-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.profile-chip #profileName {
+  font-size: 13px; font-weight: 700; color: #075985;
+  max-width: 90px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+[data-theme="dark"] .profile-chip { background: linear-gradient(135deg, #0c4a6e, #1e1b4b); border-color: #0ea5e9; }
+[data-theme="dark"] .profile-chip #profileName { color: #bae6fd; }
 
 /* 首次见面弹窗 */
 #onboard {
@@ -524,6 +599,8 @@ body.hide-convlist #convList { display: none; }
   cursor: pointer; font-size: 15px; box-shadow: 0 2px 8px rgba(0,0,0,.1);
 }
 @media (max-width: 900px) { #clFab { display: none !important; } }
+/* 收起对话列表时 clFab 浮在左上，给「找小伙伴」让位避免重叠 */
+body.hide-convlist #subjectBar { padding-left: 44px; }
 /* ── 内容守护弹窗：卡通温暖，不用"违规/违禁"字眼 ── */
 #modModal { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: none;
   align-items: center; justify-content: center; z-index: 1000; padding: 20px; }
@@ -574,10 +651,8 @@ body.hide-convlist #convList { display: none; }
       <button data-tab="chat" class="active"><span class="ico">💬</span>对话</button>
       <button data-tab="memory"><span class="ico">🧠</span>记忆</button>
       <button data-tab="wiki"><span class="ico">📚</span>知识库</button>
-      <button data-tab="plan"><span class="ico">🗺️</span>学习计划</button>
       <button data-tab="jobs"><span class="ico">⏰</span>定时任务</button>
-      <button data-tab="report"><span class="ico">📊</span>家长周报</button>
-      <button data-tab="stars"><span class="ico">🌌</span>知识星空</button>
+      <button data-tab="skills"><span class="ico">🎴</span>技能图鉴</button>
       <button data-tab="settings"><span class="ico">⚙️</span>设置</button>
     </nav>
     <div class="side-foot" id="statusBox">
@@ -593,8 +668,15 @@ body.hide-convlist #convList { display: none; }
       <button id="sbToggle" title="收起侧栏">☰</button>
       <span id="crumb">对话</span>
       <span id="modelBadge">…</span>
-      <button id="profileBtn" title="我的身份">👤</button>
+      <span id="companionChip" class="companion-chip" title="超级小博陪你一起成长">🐾 陪伴第 1 天</span>
+      <button id="profileBtn" class="profile-chip" title="我的身份">
+        <span class="pc-avatar"><img src="static/student.png" alt="" onerror="this.parentElement.textContent='🧒'"></span>
+        <span id="profileName">新朋友</span>
+      </button>
       <button id="themeBtn" title="切换主题">🌞 白天</button>
+      <button id="voiceBtn" class="voice-toggle" type="button" role="switch" aria-checked="false" title="开着就自动朗读小博每条回复">
+        <span class="vt-text">小博声音</span><span class="vt-state">已关</span><span class="vt-switch" aria-hidden="true"><span class="vt-knob"></span></span>
+      </button>
     </div>
 
     <!-- 对话 -->
@@ -628,12 +710,9 @@ body.hide-convlist #convList { display: none; }
     <section id="view-memory" class="view hidden"><div class="page" id="memoryPage"></div></section>
     <!-- 知识库 -->
     <section id="view-wiki" class="view hidden"><div class="page" id="wikiPage"></div></section>
-    <!-- 计划 -->
-    <section id="view-plan" class="view hidden"><div class="page" id="planPage"></div></section>
     <!-- 任务 -->
     <section id="view-jobs" class="view hidden"><div class="page" id="jobsPage"></div></section>
-    <section id="view-report" class="view hidden"><div class="page" id="reportPage"></div></section>
-    <section id="view-stars" class="view hidden"><div class="page" id="starsPage"></div></section>
+    <section id="view-skills" class="view hidden"><div class="page" id="skillsPage"></div></section>
     <!-- 设置 -->
     <section id="view-settings" class="view hidden"><div class="page" id="settingsPage"></div></section>
   </main>
@@ -736,73 +815,221 @@ function toast(msg, ms = 2200) {
 }
 
 /* ───────── 导航 ───────── */
-const TABS = { chat: "对话", memory: "记忆", wiki: "知识库", plan: "学习计划", jobs: "定时任务", report: "家长周报", stars: "知识星空", settings: "设置" };
+const TABS = { chat: "对话", memory: "记忆", wiki: "知识库", jobs: "定时任务", skills: "技能图鉴", settings: "设置" };
 let currentTab = "chat";
-const loaders = { memory: loadMemory, wiki: loadWiki, plan: loadPlan, jobs: loadJobs, report: loadReport, stars: loadStars, settings: loadSettings };
+const loaders = { memory: loadMemory, wiki: loadWiki, jobs: loadJobs, skills: loadSkills, settings: loadSettings };
 
-/* ───────── 知识星空 ───────── */
-function _hashPos(t, salt) {
-  let h = salt || 7;
-  for (const c of t) h = (h * 31 + c.charCodeAt(0)) >>> 0;
-  return { left: (h % 86) + 5, top: ((h >> 9) % 66) + 6 };
-}
-async function loadStars() {
-  const pg = $("#starsPage");
-  pg.innerHTML = `<h2>🌌 知识星空</h2><div class="desc">每聊透一个知识点、每攻克一道错题，星空就会亮一颗星。</div>加载中…`;
+/* ───────── 技能图鉴 ───────── */
+let skillsFilter = "all";
+// teaching_tactic 是教学向时期的旧类目，只用于兼容展示存量数据
+const SKILL_CAT_NAMES = { task_flow: "任务流程", play_pattern: "互动玩法", teaching_tactic: "教学策略（旧）" };
+const SKILL_CAT_ICONS = { task_flow: "🧩", play_pattern: "🎮", teaching_tactic: "🎓" };
+const skillCatIcon = c => SKILL_CAT_ICONS[c] || "🎴";
+async function loadSkills() {
+  const pg = $("#skillsPage");
+  pg.innerHTML = `<h2>🎴 技能图鉴</h2><div class="desc">小博在陪伴中学会的本领，会自动沉淀在这里；用得越多，打磨得越顺手。</div>加载中…`;
   try {
-    const d = await api("api/starmap");
-    const starsHtml = d.stars.map(s => {
-      const p = _hashPos(s.title, 7);
-      return `<span class="star ${s.covered ? "lit" : ""}" style="left:${p.left}%;top:${p.top}%"
-        title="${esc(s.title)}${s.covered ? `（聊过 ${s.hits} 次）` : "（还没聊到）"}"></span>`;
-    }).join("") + d.gold.map((g, i) => {
-      const p = _hashPos(g.title, 99 + i);
-      return `<span class="star gold" style="left:${p.left}%;top:${p.top + 18}%"
-        title="攻克的错题：${esc(g.title)}">★</span>`;
-    }).join("");
-    pg.innerHTML = `<h2>🌌 知识星空</h2><div class="desc">每聊透一个知识点、每攻克一道错题，星空就会亮一颗星。</div>
-      <div class="card">
-        <h3>我的小宇宙 <span class="count">已点亮 ${d.covered_count + d.gold.length} / ${d.stars.length + d.gold.length} 颗</span></h3>
-        <div class="starfield">${starsHtml || `<div class="empty" style="color:#93a">还没有星星，去知识库加几个知识点，再和超级小博聊聊吧～</div>`}</div>
-        <div class="star-legend">
-          <span><span class="star lit demo"></span> 聊过的知识点</span>
-          <span><span class="star demo"></span> 还没聊到的</span>
-          <span><span class="star gold demo">★</span> 攻克的错题</span>
-        </div>
-      </div>`;
-  } catch (e) { pg.innerHTML = `<div class="card">加载失败：${esc(e.message)}</div>`; }
+    const qs = curUid ? "?uid=" + encodeURIComponent(curUid) : "";
+    const [d, c] = await Promise.all([
+      api("api/skills" + qs),
+      api("api/companion" + qs).catch(() => null),
+    ]);
+    const tabs = [["all", "全部"], ["task_flow", "任务流程"], ["play_pattern", "互动玩法"], ["retired", "已退休"]];
+    const list = (d.skills || []).filter(s => {
+      if (skillsFilter === "all") return s.status !== "deprecated";
+      if (skillsFilter === "retired") return s.status === "deprecated";
+      return s.category === skillsFilter && s.status !== "deprecated";
+    });
+    pg.innerHTML = `<h2>🎴 技能图鉴</h2>
+      <div class="desc">小博在陪伴中学会的本领，会自动沉淀在这里；用得越多，打磨得越顺手。</div>
+      <div class="skills-head">
+        ${c ? `<span class="companion-chip">🐾 陪伴第 ${c.days} 天 · 一起聊过 ${c.total_tokens >= 10000 ? (c.total_tokens / 10000).toFixed(1) + " 万" : c.total_tokens} token</span>` : ""}
+        <div class="skills-tabs">${tabs.map(([k, n]) => `<button data-skfilter="${k}" class="${skillsFilter === k ? "active" : ""}">${n}</button>`).join("")}</div>
+        <button class="btn small" id="skillNewBtn">＋ 手动教小博一个本领</button>
+        <button class="btn small" id="skillUploadBtn">📥 导入 SKILL.md</button>
+        <button class="btn small" id="skillSrcBtn">📁 外部目录</button>
+      </div>
+      ${list.length ? `<div class="skill-grid">${list.map(skillCardHtml).join("")}</div>` : `<div class="desc" style="margin-top:20px">还没有收集到本领～和小博多聊聊，聊出好套路它会自己存下来的。</div>`}`;
+  } catch (e) {
+    pg.innerHTML = `<h2>🎴 技能图鉴</h2><div class="desc">加载失败，请稍后再试。</div>`;
+  }
 }
-
-/* ───────── 家长周报 ───────── */
-async function loadReport() {
-  const pg = $("#reportPage");
-  pg.innerHTML = `<h2>📊 家长周报</h2><div class="desc">超级小博每周把孩子的学习情况整理成给家长看的报告。</div>加载中…`;
-  try {
-    const d = await api("api/report/weekly");
-    const s = d.stats || {};
-    const tiles = [
-      ["📒", "错题", `${s.mistakes_total ?? 0} 道`, `已掌握 ${s.mistakes_mastered ?? 0}`],
-      ["📝", "生词", `${s.words_total ?? 0} 条`, `已掌握 ${s.words_mastered ?? 0}`],
-      ["🎯", "本周挑战", `${s.quizzes_this_week ?? 0} 套`, `全对 ${s.quizzes_passed ?? 0} 套`],
-      ["💬", "本周对话", `${s.chat_sessions ?? 0} 次`, s.period || ""],
-    ];
-    pg.innerHTML = `<h2>📊 家长周报</h2><div class="desc">超级小博每周把孩子的学习情况整理成给家长看的报告。</div>
-      <div class="stat-tiles">${tiles.map(t =>
-        `<div class="stat-tile"><div class="st-ico">${t[0]}</div><div class="st-k">${t[1]}</div>
-         <div class="st-v">${t[2]}</div><div class="st-sub">${esc(t[3])}</div></div>`).join("")}</div>
-      <div class="card"><h3>本周报告 ${d.generated_at ? `<span class="count">生成于 ${new Date(d.generated_at * 1000).toLocaleString("zh-CN")}</span>` : ""}</h3>
-        ${d.report
-          ? `<div class="report-body">${md(d.report)}</div>`
-          : `<div class="empty">（还没有周报，点下面按钮让超级小博整理一份～）</div>`}
-        <button class="btn" id="rpGen" style="margin-top:12px">${d.report ? "🔄 重新生成" : "✨ 生成本周周报"}</button>
-      </div>`;
-    $("#rpGen").onclick = async () => {
-      toast("超级小博正在整理这一周的学习情况… ⏳");
-      try { await api("api/report/weekly/refresh", { method: "POST", body: {} }); loadReport(); toast("周报已生成 ✓"); }
-      catch (e) { toast("生成失败：" + e.message); }
+function skillCardHtml(s) {
+  const eff = Math.round((s.effectiveness || 0) * 100);
+  return `<div class="skill-card ${s.status === "deprecated" ? "retired" : ""}" data-skill-view="${esc(s.slug)}">
+    <div class="sc-title">${skillCatIcon(s.category)} ${esc(s.title || s.slug)}</div>
+    <div class="sc-meta">
+      <span>${SKILL_CAT_NAMES[s.category] || s.category}</span>
+      ${s.source === "external" ? `<span class="sc-src">来自外部</span>` : ""}
+      ${s.status === "deprecated" ? `<span class="sc-src">已退休</span>` : ""}
+    </div>
+    ${s.parent_note ? `<div class="sc-note">${esc(s.parent_note)}</div>` : ""}
+    <div class="sc-bar"><i style="width:${eff}%"></i></div>
+    <div class="sc-foot"><span>复用 ${s.usage_count || 0} 次</span><span>效果 ${eff}%</span></div>
+  </div>`;
+}
+async function openSkillDrawer(slug) {
+  const qs = curUid ? "?uid=" + encodeURIComponent(curUid) : "";
+  const s = await api("api/skills/" + encodeURIComponent(slug) + qs);
+  const mask = document.createElement("div");
+  mask.className = "skill-drawer-mask";
+  const eff = Math.round((s.effectiveness || 0) * 100);
+  const log = (s.usage_log || []).slice(-10).reverse().map(r =>
+    `<div>· ${esc((r.ts || "").slice(0, 10))} 复用${r.variant ? "（变体：" + esc(r.variant) + "）" : ""}${r.effectiveness != null ? " · 效果 " + Math.round(r.effectiveness * 100) + "%" : ""}</div>`
+  ).join("") || "<div>还没有复用记录</div>";
+  mask.innerHTML = `<div class="skill-drawer">
+    <h3>${skillCatIcon(s.category)} ${esc(s.title)}</h3>
+    <div class="sc-meta"><span>${SKILL_CAT_NAMES[s.category] || s.category}</span><span>复用 ${s.usage_count} 次 · 效果 ${eff}%</span>${s.source === "external" ? `<span class="sc-src">来自外部 · 只读</span>` : ""}</div>
+    ${s.parent_note ? `<div class="sd-sec"><h4>备注</h4><div class="sd-log">${esc(s.parent_note)}</div></div>` : ""}
+    <div class="sd-sec"><h4>本领全文（SKILL.md）</h4><div class="sd-body">${md(s.body || "（无正文）")}</div></div>
+    <div class="sd-sec"><h4>成长日记</h4><div class="sd-log">${log}</div></div>
+    <div class="sd-actions">
+      ${s.source !== "external" ? `
+        <button class="btn small" id="sdEdit">✏️ 编辑</button>
+        <button class="btn small" id="sdOptimize">✨ 小博化</button>
+        <button class="btn small" id="sdToggle">${s.status === "deprecated" ? "▶️ 启用" : "⏸ 停用"}</button>
+        <button class="btn small danger" id="sdDel">🗑 删除</button>` : `<button class="btn small" id="sdClone">📥 复制为可编辑副本</button>`}
+      <button class="btn small" id="sdClose">关闭</button>
+    </div>
+  </div>`;
+  document.body.appendChild(mask);
+  const close = () => mask.remove();
+  mask.addEventListener("click", e => { if (e.target === mask) close(); });
+  mask.querySelector("#sdClose").onclick = close;
+  const post = (path, body) => api(path + (curUid ? (path.includes("?") ? "&" : "?") + "uid=" + encodeURIComponent(curUid) : ""), { method: "POST", body: body || {} });
+  if (mask.querySelector("#sdToggle")) mask.querySelector("#sdToggle").onclick = async () => { await post(`api/skills/${s.slug}/toggle`); close(); loadSkills(); };
+  if (mask.querySelector("#sdOptimize")) mask.querySelector("#sdOptimize").onclick = async () => {
+    const btn = mask.querySelector("#sdOptimize");
+    btn.textContent = "✨ 小博化中…"; btn.disabled = true;
+    const r = await post(`api/skills/${s.slug}/optimize`, {});
+    if (r && r.ok) { toast("小博化完成 ✓"); const slug = s.slug; close(); openSkillDrawer(slug); }
+    else { toast("失败了" + (r && r.error ? "：" + r.error : "")); btn.textContent = "✨ 小博化"; btn.disabled = false; }
+  };
+  if (mask.querySelector("#sdClone")) mask.querySelector("#sdClone").onclick = async () => {
+    const r = await post(`api/skills/${s.slug}/clone`, {});
+    if (r && r.ok) { toast("已复制为可编辑副本" + (r.title ? "：" + r.title : "")); close(); loadSkills(); }
+    else { toast("失败" + (r && r.error ? "：" + r.error : "")); }
+  };
+  if (mask.querySelector("#sdDel")) mask.querySelector("#sdDel").onclick = async () => {
+    if (!confirm("确定删除这个本领吗？小博会忘记它。")) return;
+    await fetch(`api/skills/${s.slug}${curUid ? "?uid=" + encodeURIComponent(curUid) : ""}`, { method: "DELETE" });
+    close(); loadSkills(); toast("已删除");
+  };
+  if (mask.querySelector("#sdEdit")) mask.querySelector("#sdEdit").onclick = () => {
+    mask.querySelector(".sd-body").innerHTML =
+      `<textarea id="sdBody" style="width:100%;min-height:220px">${esc(s.body || "")}</textarea>
+       <input id="sdTitle" value="${esc(s.title)}" style="width:100%;margin-top:8px" placeholder="本领名称">
+       <button class="btn small" id="sdSave">💾 保存</button>`;
+    mask.querySelector("#sdSave").onclick = async () => {
+      await post(`api/skills/${s.slug}/update`, { title: mask.querySelector("#sdTitle").value, body: mask.querySelector("#sdBody").value });
+      close(); loadSkills(); toast("已保存 ✓");
     };
-  } catch (e) { pg.innerHTML = `<div class="card">加载失败：${esc(e.message)}</div>`; }
+  };
 }
+function openSkillNew() {
+  const mask = document.createElement("div");
+  mask.className = "skill-drawer-mask";
+  mask.innerHTML = `<div class="skill-drawer">
+    <h3>＋ 手动教小博一个本领</h3>
+    <div class="sd-sec"><h4>名称</h4><input id="snTitle" style="width:100%" placeholder="比如：三分钟折一只纸青蛙"></div>
+    <div class="sd-sec"><h4>触发场景（关键词，空格分隔）</h4><input id="snTrigger" style="width:100%" placeholder="折纸 青蛙 手工"></div>
+    <div class="sd-sec"><h4>类目</h4><select id="snCat"><option value="task_flow">任务流程</option><option value="play_pattern">互动玩法</option></select></div>
+    <div class="sd-sec"><h4>本领内容（Markdown）</h4><textarea id="snBody" style="width:100%;min-height:220px" placeholder="# 什么时候用&#10;……&#10;# 怎么做&#10;1. ……"></textarea></div>
+    <div class="sd-actions"><button class="btn small" id="snSave">💾 保存</button><button class="btn small" id="snClose">取消</button></div>
+  </div>`;
+  document.body.appendChild(mask);
+  const close = () => mask.remove();
+  mask.addEventListener("click", e => { if (e.target === mask) close(); });
+  mask.querySelector("#snClose").onclick = close;
+  mask.querySelector("#snSave").onclick = async () => {
+    const title = mask.querySelector("#snTitle").value.trim();
+    const body = mask.querySelector("#snBody").value.trim();
+    if (!title || !body) { toast("名称和内容都要填哦"); return; }
+    await api("api/skills" + (curUid ? "?uid=" + encodeURIComponent(curUid) : ""), { method: "POST", body: {
+      title, body,
+      trigger: mask.querySelector("#snTrigger").value.trim(),
+      category: mask.querySelector("#snCat").value,
+    }});
+    close(); loadSkills(); toast("小博学会了 ✓");
+  };
+}
+
+function openSkillUpload() {
+  const mask = document.createElement("div");
+  mask.className = "skill-drawer-mask";
+  mask.innerHTML = `<div class="skill-drawer">
+    <h3>📥 导入 SKILL.md</h3>
+    <div class="sd-sec"><div class="desc">上传一个 SKILL.md（Claude Code / OpenClaw 的 skill 直接能用），或粘贴 Markdown 全文。小博会自动读取开头的信息。</div></div>
+    <div class="sd-sec"><input type="file" id="suFile" accept=".md,.markdown,.txt" style="width:100%"></div>
+    <div class="sd-sec"><h4>或粘贴全文</h4><textarea id="suBody" style="width:100%;min-height:180px" placeholder="---&#10;title: ...&#10;---&#10;# 正文"></textarea></div>
+    <div class="sd-actions"><button class="btn small" id="suGo">📥 导入</button><button class="btn small" id="suClose">取消</button></div>
+  </div>`;
+  document.body.appendChild(mask);
+  const close = () => mask.remove();
+  mask.addEventListener("click", e => { if (e.target === mask) close(); });
+  mask.querySelector("#suClose").onclick = close;
+  mask.querySelector("#suFile").addEventListener("change", e => {
+    const f = e.target.files[0]; if (!f) return;
+    const rd = new FileReader();
+    rd.onload = () => { mask.querySelector("#suBody").value = rd.result; };
+    rd.readAsText(f);
+  });
+  mask.querySelector("#suGo").onclick = async () => {
+    const md_text = mask.querySelector("#suBody").value.trim();
+    if (!md_text) { toast("选个文件或粘贴内容吧"); return; }
+    const filename = ((mask.querySelector("#suFile").files[0]) || {}).name || "";
+    const r = await api("api/skills/from-md" + (curUid ? "?uid=" + encodeURIComponent(curUid) : ""), {
+      method: "POST", body: { md: md_text, filename }
+    });
+    if (r && r.ok) { close(); loadSkills(); toast("导入成功" + (r.title ? "：" + r.title : "")); }
+    else { toast("导入失败" + (r && r.error ? "：" + r.error : "")); }
+  };
+}
+
+async function openSkillSources() {
+  const qs = curUid ? "?uid=" + encodeURIComponent(curUid) : "";
+  let data = { sources: [], external_total: 0 };
+  try { data = await api("api/skills/sources" + qs); } catch (e) {}
+  const mask = document.createElement("div");
+  mask.className = "skill-drawer-mask";
+  const rows = (data.sources || []).map(s =>
+    `<div class="sd-log">· ${esc(s.dir)} ${s.exists ? "" : "<span style='color:#e88'>(路径不存在)</span>"} — ${s.count} 个 skill</div>`
+  ).join("") || "<div class='desc'>还没挂载任何外部目录</div>";
+  mask.innerHTML = `<div class="skill-drawer">
+    <h3>📁 外部 skill 目录</h3>
+    <div class="sd-sec"><div class="desc">把 Claude Code / OpenClaw 的 skills 目录挂进来，小博就能只读复用（在卡片里"复制为可编辑副本"后可改、可✨小博化）。当前共 ${data.external_total || 0} 个外部 skill。</div></div>
+    <div class="sd-sec"><h4>已挂载目录</h4>${rows}</div>
+    <div class="sd-sec"><h4>添加目录</h4><input id="ssDir" style="width:100%" placeholder="如 ~/.claude/skills 或绝对路径"></div>
+    <div class="sd-actions"><button class="btn small" id="ssAdd">➕ 添加并刷新</button><button class="btn small" id="ssClose">关闭</button></div>
+  </div>`;
+  document.body.appendChild(mask);
+  const close = () => mask.remove();
+  mask.addEventListener("click", e => { if (e.target === mask) close(); });
+  mask.querySelector("#ssClose").onclick = close;
+  mask.querySelector("#ssAdd").onclick = async () => {
+    const dir = mask.querySelector("#ssDir").value.trim();
+    if (!dir) { toast("填个目录路径"); return; }
+    const r = await api("api/skills/sources" + qs, { method: "POST", body: { dir } });
+    if (r && r.ok) { toast("已添加，图鉴已刷新"); close(); loadSkills(); }
+    else { toast("失败" + (r && r.error ? "：" + r.error : "")); }
+  };
+}
+/* 图鉴页内点击：tab 过滤 / 新建 / 开卡片 */
+document.addEventListener("click", e => {
+  const f = e.target.closest("[data-skfilter]");
+  if (f) { skillsFilter = f.dataset.skfilter; loadSkills(); return; }
+  if (e.target.closest("#skillNewBtn")) { openSkillNew(); return; }
+  if (e.target.closest("#skillUploadBtn")) { openSkillUpload(); return; }
+  if (e.target.closest("#skillSrcBtn")) { openSkillSources(); return; }
+  const v = e.target.closest("[data-skill-view]");
+  if (v) { openSkillDrawer(v.dataset.skillView); return; }
+  const u = e.target.closest("[data-skill-undo]");
+  if (u) {
+    api(`api/skills/${u.dataset.skillUndo}/undo` + (curUid ? "?uid=" + encodeURIComponent(curUid) : ""), { method: "POST", body: {} })
+      .then(() => { toast("已撤销，小博不会再自动存这个套路"); u.closest(".ev-skill").remove(); });
+  }
+});
+
 $("#nav").addEventListener("click", e => {
   const b = e.target.closest("button[data-tab]"); if (!b) return;
   switchTab(b.dataset.tab);
@@ -828,6 +1055,11 @@ async function refreshStatus() {
     $("#dotCron").className = "dot " + (o.scheduler_enabled ? "ok" : "");
     $("#statCron").textContent = "定时：" + (o.scheduler_enabled ? "运行中" : "未启用");
   } catch (e) { $("#modelBadge").textContent = "连接失败"; }
+  try {
+    const c = await api("api/companion" + (curUid ? "?uid=" + encodeURIComponent(curUid) : ""));
+    const wan = c.total_tokens >= 10000 ? (c.total_tokens / 10000).toFixed(1) + " 万" : c.total_tokens;
+    $("#companionChip").textContent = `🐾 陪伴第 ${c.days} 天 · 一起聊过 ${wan} token`;
+  } catch (e) {}
 }
 
 /* ───────── 对话 ───────── */
@@ -915,7 +1147,84 @@ function evHtml(ev) {
   if (ev.type === "letter") {
     return `<div class="ev-letter">${ev.kind === "birthday" ? "🎂 超级小博记得今天！" : "💌 超级小博主动来信"}</div>`;
   }
+  if (ev.type === "skill_saved") {
+    return `<div class="ev-skill">💾 小博学会了新本领「${esc(ev.title)}」${ev.slug ? `<button class="esk-act" data-skill-view="${esc(ev.slug)}">查看</button><button class="esk-act" data-skill-undo="${esc(ev.slug)}">撤销</button>` : ""}</div>`;
+  }
+  if (ev.type === "skill_used") {
+    return `<div class="ev-skill">🎯 复用了本领「${esc(ev.title)}」</div>`;
+  }
+  if (ev.type === "skill_evolved") {
+    return `<div class="ev-skill">✨ 本领「${esc(ev.title)}」被打磨得更顺手了</div>`;
+  }
+  if (ev.type === "companion_milestone") {
+    const txt = ev.kind === "days" ? `小博陪伴你第 ${ev.value} 天啦` : `你们一起聊过 ${ev.value >= 10000 ? (ev.value / 10000) + " 万" : ev.value} token 啦`;
+    return `<div class="ev-skill">🎉 ${txt}！</div>`;
+  }
   return "";
+}
+
+/* ── Flow 卡：闯关 / 步骤树 双模式（同一 DOM，CSS class 切换） ── */
+const FLOW_TYPES = ["plan", "step", "tool_round", "replanned", "flow_done"];
+let flowMode = localStorage.getItem("lc_flow_mode") || "quest";
+const NODE_ICO = { pending: "🔒", running: "⚔️", done: "✅", skipped: "⏭️", failed: "❌", inserted: "🌱" };
+function flowFromEvents(events) {
+  let f = null;
+  for (const ev of events || []) {
+    if (ev.type === "plan") {
+      f = { goal: ev.goal || "", done: false, summary: "", rate: 0,
+            nodes: (ev.nodes || []).map(n => ({ id: n.node_id ?? n.id, title: n.title, status: n.status || "pending", tools: [] })) };
+    } else if (!f) { continue; }
+    else if (ev.type === "step") {
+      const n = f.nodes.find(x => x.id === ev.node_id);
+      if (n) n.status = ev.status;
+    } else if (ev.type === "tool_round") {
+      const n = f.nodes.find(x => x.id === ev.node_id);
+      if (n) n.tools.push(ev);
+    } else if (ev.type === "replanned") {
+      if (ev.node) {
+        const idx = f.nodes.findIndex(x => x.status === "running");
+        f.nodes.splice(idx >= 0 ? idx + 1 : f.nodes.length, 0,
+          { id: ev.node.id ?? ev.node.node_id, title: ev.node.title, status: "inserted", tools: [] });
+      }
+    } else if (ev.type === "flow_done") {
+      f.done = true; f.summary = ev.summary || ""; f.rate = ev.completion_rate || 0;
+    }
+  }
+  return f;
+}
+function flowCardHtml(f) {
+  if (!f) return "";
+  const nodes = f.nodes.map(n => {
+    const ico = NODE_ICO[n.status] || "▫️";
+    // 同工具同轮合并（模型一轮可能并行调多次同工具，逐条列会刷屏）
+    const grouped = {};
+    (n.tools || []).forEach(t => {
+      const k = t.tool + "|" + t.round + "|" + (t.success === false ? "F" : "T");
+      grouped[k] = grouped[k] || { ...t, count: 0 };
+      grouped[k].count++;
+    });
+    const tools = Object.values(grouped).map(t => {
+      const [tico, nm] = TOOL_META[t.tool] || ["🔧", t.tool];
+      const times = t.count > 1 ? ` ×${t.count}` : "";
+      return `<div class="fc-tools">${tico} ${esc(nm)}·第${t.round}轮${times} ${t.success === false ? "失败" : "✓"}</div>`;
+    }).join("");
+    return `<div class="fc-node st-${n.status}"><span class="tn-st">${ico}</span><span class="qn-ico">${ico}</span><div class="qn-cell"><div class="qn-title">${esc(n.title)}</div>${tools}</div></div>`;
+  }).join("");
+  const stars = f.nodes.map(n => (n.status === "done" || n.status === "skipped") ? "⭐" : "☆").join("");
+  return `<div class="flowcard mode-${flowMode}${f.done ? " fc-done" : ""}">
+    <div class="fc-head"><span>🗺️</span><span class="fc-goal">${esc(f.goal)}</span><button class="fc-mode" onclick="toggleFlowMode()">${flowMode === "quest" ? "🌳 步骤树" : "🗺️ 闯关"}</button></div>
+    <div class="fc-body"><div class="fc-nodes">${nodes}</div><div class="fc-stars">${stars}</div></div>
+    ${f.done ? `<div class="fc-foot">🎉 ${esc(f.summary)}${f.rate ? `（完成率 ${Math.round(f.rate * 100)}%）` : ""}</div>` : ""}
+  </div>`;
+}
+function toggleFlowMode() {
+  flowMode = flowMode === "quest" ? "tree" : "quest";
+  localStorage.setItem("lc_flow_mode", flowMode);
+  document.querySelectorAll(".flowcard").forEach(c => {
+    c.classList.toggle("mode-quest", flowMode === "quest");
+    c.classList.toggle("mode-tree", flowMode === "tree");
+  });
+  document.querySelectorAll(".fc-mode").forEach(b => b.textContent = flowMode === "quest" ? "🌳 步骤树" : "🗺️ 闯关");
 }
 function msgEl(m) {
   const div = document.createElement("div");
@@ -923,10 +1232,13 @@ function msgEl(m) {
   const who = m.role === "user" ? (studentName || "你") : "超级小博";
   const av = m.role === "user"
     ? '<img src="static/student.png" alt="" onerror="this.outerHTML=\'🧒\'">' : BOT_AVATAR;
+  const flow = m.flow || flowFromEvents(m.events);
+  const nonFlowEvents = (m.events || []).filter(e => !FLOW_TYPES.includes(e.type));
   div.innerHTML = `<div class="avatar">${av}</div>
     <div class="bubble"><div class="who">${who}</div>
     ${m.proc ? `<div class="stage done"><span class="st-ico">⚡</span><span class="st-txt">${esc(m.proc)}</span><span class="dots"></span></div>` : ""}
-    <div class="evbox">${(m.events || []).map(evHtml).join("")}</div>
+    ${flow ? flowCardHtml(flow) : ""}
+    <div class="evbox">${nonFlowEvents.map(evHtml).join("")}</div>
     <div class="body">${m.image ? `<img class="msg-img" src="${m.image}">` : ""}${m.role === "user" ? esc(m.text).replace(/\n/g, "<br>") : md(m.text)}</div>
     ${m.action && m.action.mistake_ids && m.action.mistake_ids.length
       ? `<button class="btn small quiz-btn" data-mids="${m.action.mistake_ids.join(",")}">📝 给我出题挑战</button>` : ""}
@@ -947,12 +1259,32 @@ let curAudio = null, curTtsBtn = null;
 function playTTS(text, btn) {
   if (curAudio) { curAudio.pause(); if (curTtsBtn) curTtsBtn.textContent = "🔊"; }
   if (curTtsBtn === btn && curAudio) { curAudio = null; curTtsBtn = null; return; }
+  const setBtn = s => { if (btn) btn.textContent = s; };   // btn 可空（自动朗读时无按钮）
   const a = new Audio("api/tts?text=" + encodeURIComponent(text.slice(0, 300)));
-  curAudio = a; curTtsBtn = btn; btn.textContent = "⏸";
-  a.onended = () => { btn.textContent = "🔊"; curAudio = null; curTtsBtn = null; };
-  a.onerror = () => { btn.textContent = "🔊"; toast("语音生成失败"); curAudio = null; curTtsBtn = null; };
-  a.play().catch(() => { btn.textContent = "🔊"; });
+  curAudio = a; curTtsBtn = btn; setBtn("⏸");
+  a.onended = () => { setBtn("🔊"); curAudio = null; curTtsBtn = null; };
+  a.onerror = () => { setBtn("🔊"); if (btn) toast("语音生成失败"); curAudio = null; curTtsBtn = null; };
+  a.play().catch(() => { setBtn("🔊"); });
 }
+
+/* ───────── 自动朗读开关（右上角，开着就自动播小博每条回复）───────── */
+let autoVoice = localStorage.getItem("lc_autoplay_voice") === "1";
+function syncVoiceBtn() {
+  const b = $("#voiceBtn");
+  if (!b) return;
+  b.classList.toggle("on", autoVoice);                          // 开关图形 + 颜色
+  b.setAttribute("aria-checked", autoVoice ? "true" : "false");
+  const st = b.querySelector(".vt-state");
+  if (st) st.textContent = autoVoice ? "已开" : "已关";          // 明确状态文字
+  b.title = autoVoice ? "小博声音已开·点此关闭" : "小博声音已关·点此开启";
+}
+$("#voiceBtn").onclick = () => {
+  autoVoice = !autoVoice;
+  localStorage.setItem("lc_autoplay_voice", autoVoice ? "1" : "0");
+  syncVoiceBtn();
+  toast(autoVoice ? "已打开小博声音，每条回复会自动读出来" : "已关闭小博声音");
+};
+syncVoiceBtn();
 
 /* ───────── 专属题卡 ───────── */
 async function renderQuiz(wrap, m) {
@@ -1073,6 +1405,25 @@ async function send() {
         botMsg.events.push(d);
         showModeration(d);
         if (d.category === "mental") setStage("💛", "正在认真陪你", "认真陪");
+      } else if (FLOW_TYPES.includes(d.type)) {
+        // Flow 事件：重建 flow 对象并重渲卡片（闯关/步骤树）
+        botMsg.events.push(d);
+        botMsg.flow = flowFromEvents(botMsg.events);
+        let fc = evbox.querySelector(".flowcard");
+        if (fc) fc.outerHTML = flowCardHtml(botMsg.flow);
+        else evbox.insertAdjacentHTML("afterbegin", flowCardHtml(botMsg.flow));
+        if (d.type === "plan") setStage("🗺️", "规划冒险路线", "做计划");
+        else if (d.type === "step") setStage("⚔️", "闯关：" + (d.note || "下一步"), "闯关");
+        else if (d.type === "tool_round") {
+          const [ico, nm] = TOOL_META[d.tool] || ["🔧", d.tool];
+          setStage(ico, `用${nm}处理（第${d.round}轮）`, nm);
+        } else if (d.type === "replanned") setStage("🌱", "调整路线：补一下基础", "调整路线");
+        else if (d.type === "flow_done") setStage("🎉", "冒险完成！", "完成冒险");
+      } else if (d.type === "skill_saved" || d.type === "skill_used" || d.type === "skill_evolved" || d.type === "companion_milestone") {
+        botMsg.events.push(d);
+        evbox.insertAdjacentHTML("beforeend", evHtml(d));
+        if (d.type === "skill_saved") setStage("💾", "学会了新本领", "新本领");
+        if (d.type === "companion_milestone") refreshStatus();
       } else if (d.type === "tool" || d.type === "wiki" || d.type === "route") {
         botMsg.events.push(d);
         evbox.insertAdjacentHTML("beforeend", evHtml(d));
@@ -1111,6 +1462,10 @@ async function send() {
     saveMsgs(list);
     sending = false; $("#sendBtn").disabled = false;
     syncSubject(); refreshStatus();
+    if (autoVoice && botMsg.text) {          // 自动朗读小博这条回复
+      const tb = lastMsg.querySelector(".tts-btn");
+      if (tb) playTTS(botMsg.text, tb);
+    }
     $("#inp").focus();
     maybeTitle();
   }
@@ -1289,30 +1644,8 @@ async function loadWiki() {
   });
 }
 
-/* ───────── 学习计划 ───────── */
-function loadPlan() {
-  const pg = $("#planPage");
-  pg.innerHTML = `<h2>🗺️ 学习计划</h2><div class="desc">把学习目标拆成一步一步可执行的小任务。</div>
-    <div class="card"><h3>生成计划</h3>
-      <label class="f">学习目标</label>
-      <input type="text" id="pGoal" placeholder="如：复习分数加减法 / 学光合作用 / 写一篇写景作文">
-      <button class="btn" id="pGo">生成计划</button>
-    </div><div id="pResult"></div>`;
-  $("#pGo").onclick = async () => {
-    const goal = $("#pGoal").value.trim(); if (!goal) return toast("先填个学习目标吧～");
-    $("#pResult").innerHTML = `<div class="card">生成中…</div>`;
-    try {
-      const d = await api("api/plan", { method: "POST", body: { goal } });
-      $("#pResult").innerHTML = `<div class="card"><h3>「${esc(goal)}」拆成 ${d.steps.length} 步</h3>` +
-        d.steps.map(s => `<div class="step"><div class="num">${s.id + 1}</div>
-          <div><div class="tt">${esc(s.title)}</div>
-          ${s.description ? `<div class="dd">${esc(s.description)}</div>` : ""}</div></div>`).join("") + `</div>`;
-    } catch (e) { $("#pResult").innerHTML = `<div class="card">生成失败：${esc(e.message)}</div>`; }
-  };
-}
-
 /* ───────── 定时任务 ───────── */
-const TASK_TYPES = [["daily_review","每日复习"],["weekly_summary","每周总结"],["spaced_review","间隔复习"],["push_reminder","直接提醒（不跑 AI）"],["custom_prompt","自定义指令"]];
+const TASK_TYPES = [["daily_review","每日复习"],["spaced_review","间隔复习"],["push_reminder","直接提醒（不跑 AI）"],["custom_prompt","自定义指令"]];
 async function loadJobs() {
   const pg = $("#jobsPage");
   let jobs = null, err = null;
@@ -1423,7 +1756,7 @@ const PROFILES = [
 ];
 function newUid() { return "u_" + crypto.randomUUID().replace(/-/g, "").slice(0, 10); }
 function updateProfileBtn() {
-  $("#profileBtn").textContent = studentName ? "👤 " + studentName : "👤";
+  $("#profileName").textContent = studentName || "新朋友";
   $("#profileBtn").title = studentName ? "当前身份：" + studentName : "我的身份";
 }
 function bootInto() {

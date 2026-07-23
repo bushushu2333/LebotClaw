@@ -1,8 +1,22 @@
-import json
+"""SkillLibrary —— 旧版技能库公开 API 的兼容壳（生产代码已不再使用，仅存量
+测试与旧调用方保留）。
+
+v2.0 起存储后端从单个 skills.json 换成 SKILL.md 文件包（core/skillstore.py），
+本类只做 TeachingSkill <-> 文件包条目的转换与委托。旧 skills.json 在首次
+初始化时自动迁移为文件包并改名 skills.json.migrated（幂等）。
+"""
 import time
 from pathlib import Path
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field
 from typing import Optional, Union, List, Dict
+
+from lebotclaw.core.skillstore import (
+    SkillStore,
+    _iso,
+    _parse_time,
+    parse_body_sections,
+    render_body,
+)
 
 
 @dataclass
@@ -19,36 +33,110 @@ class TeachingSkill:
     usage_count: int = 0
     created_at: float = 0.0
     source_session: str = ""
+    # v2.0 新增字段（均有默认值，旧调用方不受影响）
+    slug: str = ""
+    category: str = "task_flow"  # task_flow | play_pattern（旧数据可能有 teaching_tactic）
+    version: str = "1.0.0"
+    status: str = "active"  # active | deprecated
+    source: str = "internal"  # internal | external
+    knowledge_points: List[str] = field(default_factory=list)
+    bloom: List[str] = field(default_factory=list)
+    body: str = ""  # SKILL.md Markdown 正文（复用注入用）
 
 
 class SkillLibrary:
+    """公开方法签名与旧版一致；内部委托 SkillStore 文件包后端。
+
+    store_path 兼容两种形态：
+      - 以 .json 结尾：视为旧版 skills.json 路径，存储根目录取其父目录
+        （默认 ~/.lebotclaw/skills.json -> 文件包落在 ~/.lebotclaw/skills/）
+      - 其他：直接作为存储根目录
+    """
+
     def __init__(self, store_path: Union[str, Path] = "~/.lebotclaw/skills.json"):
         self.store_path = Path(store_path).expanduser()
-        self.store_path.parent.mkdir(parents=True, exist_ok=True)
-        self._skills: List[Dict] = []
-        self._next_id = 1
-        if self.store_path.exists():
-            try:
-                data = json.loads(self.store_path.read_text(encoding="utf-8"))
-                self._skills = data.get("skills", [])
-                self._next_id = data.get("next_id", 1)
-            except (json.JSONDecodeError, OSError):
-                self._skills = []
-                self._next_id = 1
+        if self.store_path.suffix == ".json":
+            store_dir = self.store_path.parent
+            legacy_json = self.store_path
+        else:
+            store_dir = self.store_path
+            legacy_json = self.store_path / "skills.json"
+        self._store = SkillStore(store_dir, legacy_json=legacy_json)
 
-    def _save(self):
-        self.store_path.write_text(
-            json.dumps({"skills": self._skills, "next_id": self._next_id}, ensure_ascii=False, indent=2),
-            encoding="utf-8",
+    @property
+    def store(self) -> SkillStore:
+        return self._store
+
+    # ------------------------------------------------------------------
+    # TeachingSkill <-> 文件包条目
+    # ------------------------------------------------------------------
+
+    def _skill_to_dict(self, skill: TeachingSkill) -> Dict:
+        body = skill.body or render_body(
+            skill.trigger_scenario,
+            skill.steps_template,
+            skill.common_questions,
+        )
+        data = {
+            "slug": skill.slug or "",
+            "title": skill.name,
+            "category": skill.category,
+            "version": skill.version,
+            "status": skill.status,
+            "source": skill.source,
+            "subject": skill.subject,
+            "grades": list(skill.applicable_grades),
+            "knowledge_points": list(skill.knowledge_points),
+            "bloom": list(skill.bloom),
+            "trigger": skill.trigger_scenario,
+            "effectiveness": skill.effectiveness_score,
+            "usage_count": skill.usage_count,
+            "created_at": _iso(skill.created_at or time.time()),
+            "source_flow": skill.source_session,
+            "body": body,
+        }
+        if skill.id is not None:
+            data["id"] = skill.id
+        if skill.recommended_tools:
+            data["recommended_tools"] = list(skill.recommended_tools)
+        return data
+
+    def _dict_to_skill(self, entry: Dict) -> TeachingSkill:
+        body = entry.get("body", "") or ""
+        steps, questions = parse_body_sections(body)
+        return TeachingSkill(
+            id=entry.get("id"),
+            name=entry.get("title") or entry.get("name") or "",
+            trigger_scenario=entry.get("trigger", "") or "",
+            applicable_grades=list(entry.get("grades") or []),
+            subject=entry.get("subject", "") or "",
+            recommended_tools=list(entry.get("recommended_tools") or []),
+            steps_template=steps,
+            common_questions=questions,
+            effectiveness_score=float(entry.get("effectiveness") or 0.0),
+            usage_count=int(entry.get("usage_count") or 0),
+            created_at=_parse_time(entry.get("created_at")),
+            source_session=entry.get("source_flow", "") or "",
+            slug=entry.get("slug") or entry.get("name") or "",
+            category=entry.get("category", "task_flow") or "task_flow",
+            version=str(entry.get("version", "1.0.0") or "1.0.0"),
+            status=entry.get("status", "active") or "active",
+            source=entry.get("source", "internal") or "internal",
+            knowledge_points=list(entry.get("knowledge_points") or []),
+            bloom=list(entry.get("bloom") or []),
+            body=body,
         )
 
+    # ------------------------------------------------------------------
+    # 公开 API（签名不变）
+    # ------------------------------------------------------------------
+
     def add_skill(self, skill: TeachingSkill) -> int:
-        skill.id = self._next_id
-        self._next_id += 1
         if not skill.created_at:
             skill.created_at = time.time()
-        self._skills.append(asdict(skill))
-        self._save()
+        if skill.id is None:
+            skill.id = self._store.allocate_id()
+        skill.slug = self._store.add(self._skill_to_dict(skill))
         return skill.id
 
     def find_skill(
@@ -57,80 +145,24 @@ class SkillLibrary:
         subject: str = "",
         grade: str = "",
     ) -> List[TeachingSkill]:
-        results = []
-        for raw in self._skills:
-            s = TeachingSkill(**raw)
-            if subject and s.subject and s.subject != subject:
-                continue
-            if grade and s.applicable_grades and grade not in s.applicable_grades:
-                continue
-            if scenario:
-                scenario_lower = scenario.lower()
-                match_name = scenario_lower in s.name.lower()
-                match_trigger = scenario_lower in s.trigger_scenario.lower()
-                name_words = any(w in s.name for w in scenario.split() if len(w) > 1)
-                trigger_words = any(w in s.trigger_scenario for w in scenario.split() if len(w) > 1)
-                if not (match_name or match_trigger or name_words or trigger_words):
-                    continue
-            results.append(s)
-
-        results.sort(key=lambda x: x.effectiveness_score * (x.usage_count + 1), reverse=True)
-        return results
+        entries = self._store.find(scenario=scenario, subject=subject, grade=grade)
+        return [self._dict_to_skill(e) for e in entries]
 
     def update_effectiveness(self, skill_id: int, score: float) -> None:
-        for raw in self._skills:
-            if raw["id"] == skill_id:
-                old_score = raw["effectiveness_score"]
-                old_count = raw["usage_count"]
-                raw["usage_count"] = old_count + 1
-                raw["effectiveness_score"] = round(
-                    (old_score * old_count + score) / (old_count + 1), 2
-                )
-                self._save()
-                return
-
-    def auto_extract_skill(
-        self,
-        plan,
-        session_summary: str,
-        effectiveness: float,
-    ) -> Optional[TeachingSkill]:
-        total = len(plan.steps)
-        completed = sum(1 for s in plan.steps if s.status.value in ("completed", "skipped"))
-        completion_rate = round(completed / total, 2) if total > 0 else 0.0
-        if completion_rate <= 0.8 or effectiveness <= 0.7:
-            return None
-
-        completed_steps = []
-        for step in plan.steps:
-            if step.status.value in ("completed", "skipped"):
-                completed_steps.append({
-                    "title": step.title,
-                    "prompt_hint": step.description,
-                    "result": step.result[:200] if step.result else "",
-                })
-
-        if not completed_steps:
-            return None
-
-        skill = TeachingSkill(
-            name=f"自动提取: {plan.goal[:30]}",
-            trigger_scenario=session_summary[:200] if session_summary else plan.goal,
-            applicable_grades=[plan.grade] if plan.grade else [],
-            subject=plan.subject,
-            steps_template=completed_steps,
-            effectiveness_score=effectiveness,
-            usage_count=1,
-            created_at=time.time(),
+        slug = self._store.slug_by_id(skill_id)
+        if not slug:
+            return
+        self._store.record_usage(
+            slug, outcome={"source": "update_effectiveness"}, effectiveness=score
         )
-        self.add_skill(skill)
-        return skill
 
     def list_skills(self, subject: str = "") -> List[TeachingSkill]:
         results = []
-        for raw in self._skills:
-            if subject and raw.get("subject") != subject:
+        for entry in self._store.list():
+            full = self._store.get(entry["slug"]) or entry
+            skill = self._dict_to_skill(full)
+            if subject and skill.subject != subject:
                 continue
-            results.append(TeachingSkill(**raw))
+            results.append(skill)
         results.sort(key=lambda x: x.usage_count, reverse=True)
         return results

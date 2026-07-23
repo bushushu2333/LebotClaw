@@ -83,13 +83,32 @@ def blocking_stream_events(ctx: SessionContext, user_input: str):
         # 路由结果始终外露（changed 标记是否换了伙伴），前端据此亮"谁在接棒"
         yield {"type": "route", "from": before, "to": after, "changed": after != before}
 
+        # spec v2.1：陪伴计数（touch 活跃日 + 尾部 token 入账，FR-E7）
+        ctx.workspace.touch_companion()
+        try:
+            dm = ctx.workspace.check_day_milestone()
+            if dm:
+                yield {"type": "companion_milestone", **dm}
+        except Exception:  # noqa: BLE001
+            pass
+
         # mental/abuse 放行时，把化解指令注入 system prompt
         extra_system = mod.bot_instruction if (mod.hit and mod.bot_instruction) else ""
         collected = []
-        for ev in ctx.active_agent.stream_events(user_input, extra_system=extra_system):
+        for ev in ctx.active_agent.stream_events(
+                user_input, extra_system=extra_system, flow_engine=ctx.flow_engine):
             if ev.get("type") == "delta":
                 collected.append(ev.get("text", ""))
             yield ev
+
+        # token 估算入账：无 adapter usage 字段，按中英混排 ~2 字符/token 粗估；
+        # 跨里程碑（陪伴天数/token 档位）时补发 companion_milestone 事件
+        try:
+            ms = ctx.workspace.add_tokens(max(1, (len(user_input) + sum(map(len, collected))) // 2))
+            if ms:
+                yield {"type": "companion_milestone", **ms}
+        except Exception:  # noqa: BLE001
+            pass
 
         # ── 出口闸：模型输出兜底告警（不破坏已流式输出的内容）──
         try:
@@ -107,6 +126,40 @@ async def chat_and_emit(ctx: SessionContext, user_input: str) -> str:
     """NiceGUI async handler 调用入口。"""
     from nicegui import run
     return await run.io_bound(blocking_chat, ctx, user_input)
+
+
+def collapse_events_to_text(ctx: SessionContext, user_input: str) -> str:
+    """纯文本通道（飞书/CLI）透传（spec 1.9）：消费事件流，折叠成单条文本。
+
+    delta 拼成正文；Flow/Skill/陪伴事件转成简短文字行前置，
+    让纯文本通道也能看到「工作流形态」而不是裸回答。
+    """
+    body = []
+    meta = []
+    for ev in blocking_stream_events(ctx, user_input):
+        t = ev.get("type")
+        if t == "delta":
+            body.append(ev.get("text", ""))
+        elif t == "plan":
+            titles = " → ".join(n.get("title", "") for n in ev.get("nodes", []))
+            meta.append("🗺️ 计划「%s」：%s" % (ev.get("goal", ""), titles))
+        elif t == "replanned":
+            meta.append("🌱 调整路线：%s" % (ev.get("node") or {}).get("title", ""))
+        elif t == "flow_done":
+            meta.append("🎉 " + (ev.get("summary") or "任务完成"))
+        elif t == "skill_saved":
+            meta.append("💾 小博学会了新本领「%s」（图鉴页可查看/撤销）" % ev.get("title", ""))
+        elif t == "skill_used":
+            meta.append("🎯 复用了本领「%s」" % ev.get("title", ""))
+        elif t == "skill_evolved":
+            meta.append("✨ 本领「%s」被打磨得更顺手了" % ev.get("title", ""))
+        elif t == "companion_milestone":
+            if ev.get("kind") == "days":
+                meta.append("🎉 今天是小博陪伴你的第 %s 天！" % ev.get("value"))
+            else:
+                meta.append("🎉 你们一起聊过 %s token 啦！" % ev.get("value"))
+    text = "".join(body).strip()
+    return ("\n".join(meta) + "\n\n" + text) if meta else text
 
 
 # ── 拍照讲题（多模态）──────────────────────────────────────

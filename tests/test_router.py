@@ -161,12 +161,15 @@ class TestMemoryStore:
 
 class TestSkillLibrary:
     def setup_method(self):
-        self.path = tempfile.mktemp(suffix=".json")
+        # 新后端为 SKILL.md 文件包：store 根目录取 store_path 父目录，
+        # 用独立临时目录隔离，避免污染 /tmp/skills
+        self.dir = tempfile.mkdtemp()
+        self.path = os.path.join(self.dir, "skills.json")
         self.lib = SkillLibrary(store_path=self.path)
 
     def teardown_method(self):
-        if os.path.exists(self.path):
-            os.unlink(self.path)
+        import shutil
+        shutil.rmtree(self.dir, ignore_errors=True)
 
     def test_add_and_find(self):
         skill = TeachingSkill(

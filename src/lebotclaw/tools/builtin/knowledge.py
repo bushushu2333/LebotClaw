@@ -136,11 +136,14 @@ class KnowledgeTool(Tool):
                 results.append(kp)
 
         if not results:
-            subjects = sorted(set(kp["subject"] for kp in KNOWLEDGE_BASE))
+            # 查不到不算"失败"——返回 success=True + 明确指引，让模型直接用自己的
+            # 知识回答。若返回 success=False，模型会当成工具故障反复重试
+            # （2026-07-23 事故：Flow 模式下知识库未命中 → 3轮×3次重试风暴刷屏）
             return ToolResult(
-                success=False, output="",
-                error=f"No knowledge points found for '{query}'.",
-                metadata={"available_subjects": subjects},
+                success=True,
+                output=f"知识库里没有查到「{query}」相关的条目。知识库内容有限，"
+                       "请不要再调用本工具，直接用你自己的知识回答学生的问题。",
+                metadata={"count": 0},
             )
 
         output_parts = []
