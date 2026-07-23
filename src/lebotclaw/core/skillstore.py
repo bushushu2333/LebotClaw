@@ -39,6 +39,11 @@ FRONTMATTER_ORDER = [
 # 新写入 skill 的类目（通用智能体向）。旧数据里的 teaching_tactic 等教学向
 # 类目不在此列，但读取/展示完全兼容——这里只管「新写的允许什么」。
 VALID_CATEGORIES = ("task_flow", "play_pattern")
+
+# 教学向时期的遗留字段：写出时一律剥掉。旧数据只要被保存/打磨/小博化过
+# 一次，SKILL.md 即洗净（读取侧始终兼容，不洗存量未触达的文件）。
+LEGACY_TEACHING_KEYS = ("subject", "grades", "knowledge_points", "bloom",
+                        "applicable_grades")
 VALID_STATUS = ("active", "deprecated")
 VALID_SOURCES = ("internal", "external")
 
@@ -414,6 +419,8 @@ class SkillStore:
         pkg = self.skills_dir / slug
         (pkg / "versions").mkdir(parents=True, exist_ok=True)
         fm = dict(fm)
+        for k in LEGACY_TEACHING_KEYS:
+            fm.pop(k, None)
         fm["name"] = slug
         content = dump_frontmatter(fm) + "\n\n" + (body or "").lstrip("\n")
         (pkg / "SKILL.md").write_text(content, encoding="utf-8")

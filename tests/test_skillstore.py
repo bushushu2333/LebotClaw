@@ -1,5 +1,6 @@
 """SkillStore（SKILL.md 文件包后端）与 SkillLibrary 新后端的测试。"""
 import json
+import re
 import time
 
 import pytest
@@ -91,10 +92,11 @@ class TestCrud:
         entry = store.get(slug)
         assert entry["title"] == "分披萨讲分数"
         assert entry["category"] == "teaching_tactic"
-        assert entry["grades"] == ["三年级", "四年级"]
-        assert entry["knowledge_points"] == ["分数的初步认识"]
         assert entry["effectiveness"] == 0.82
         assert entry["usage_count"] == 12
+        # 去教学化：subject/grades/knowledge_points/bloom 写出即剥掉
+        for key in ("subject", "grades", "knowledge_points", "bloom"):
+            assert key not in entry, key
         assert "孩子第一次接触分数" in entry["body"]
         # 文件包结构
         pkg = store.skills_dir / slug
@@ -145,13 +147,18 @@ class TestCrud:
 # ---------------------------------------------------------------------------
 
 class TestFind:
+    def _write_legacy_pkg(self, store, slug, fm_text, body="# 正文\n"):
+        """模拟磁盘上未洗净的老文件（写出接口已会剥教学字段，只能手写）。"""
+        pkg = store.skills_dir / slug
+        pkg.mkdir(parents=True)
+        (pkg / "SKILL.md").write_text(fm_text + "\n\n" + body, encoding="utf-8")
+
     def test_subject_and_grade_filters(self, store):
-        store.add({"title": "分数入门", "trigger": "分数 概念", "subject": "math",
-                   "grades": ["三年级"], "effectiveness": 0.9})
-        store.add({"title": "古诗背诵", "trigger": "古诗 背诵", "subject": "chinese",
-                   "grades": ["三年级"], "effectiveness": 0.9})
-        store.add({"title": "方程入门", "trigger": "方程 概念", "subject": "math",
-                   "grades": ["六年级"], "effectiveness": 0.9})
+        """旧数据兼容：未洗净的老文件（带 subject/grades）按学科/年级过滤仍生效。"""
+        self._write_legacy_pkg(store, "fenru", "---\ntitle: 分数入门\ntrigger: 分数 概念\nsubject: math\ngrades: [三年级]\neffectiveness: 0.9\n---")
+        self._write_legacy_pkg(store, "gushi", "---\ntitle: 古诗背诵\ntrigger: 古诗 背诵\nsubject: chinese\ngrades: [三年级]\neffectiveness: 0.9\n---")
+        self._write_legacy_pkg(store, "fangcheng", "---\ntitle: 方程入门\ntrigger: 方程 概念\nsubject: math\ngrades: [六年级]\neffectiveness: 0.9\n---")
+        store.rebuild_index()
         hit = store.find(scenario="分数", subject="math")
         assert len(hit) == 1 and hit[0]["title"] == "分数入门"
         hit = store.find(scenario="分数", grade="六年级")
@@ -184,6 +191,16 @@ class TestFind:
         assert store.find(scenario="分数概念") == []
         hit = store.find(scenario="分数概念", status="deprecated")
         assert len(hit) == 1
+
+    def test_write_strips_legacy_teaching_fields(self, store, tmp_path):
+        """去教学化：遗留教学字段写出时一律剥掉（读取侧仍兼容）。"""
+        slug = store.add({"title": "带旧字段的神功", "trigger": "分数 概念",
+                          "subject": "math", "grades": ["3年级"],
+                          "knowledge_points": ["分数"], "bloom": ["理解"],
+                          "body": "# 什么时候用\n想学时\n# 怎么做\n慢慢来"})
+        raw = (tmp_path / "skills" / slug / "SKILL.md").read_text(encoding="utf-8")
+        for key in ("subject", "grades", "knowledge_points", "bloom"):
+            assert not re.search(r"^%s:" % key, raw, flags=re.M), key
 
 
 # ---------------------------------------------------------------------------
@@ -355,7 +372,8 @@ class TestSkillLibraryBackend:
         assert len(found) >= 1
         assert found[0].name == "分数概念讲解"
         assert found[0].category == "teaching_tactic"
-        assert found[0].knowledge_points == ["分数的初步认识"]
+        # 去教学化：knowledge_points 等教学字段写出即剥掉，读回为空
+        assert found[0].knowledge_points == []
         assert found[0].steps_template[0]["prompt_hint"] == "用一个披萨来举例"
         assert "披萨" in found[0].body
 
