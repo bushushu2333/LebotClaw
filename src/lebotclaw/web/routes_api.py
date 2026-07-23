@@ -480,7 +480,10 @@ def register_api_routes(runtime):
             )
             return (resp.content or "").strip()
 
-        new_body = await run.io_bound(_do)
+        try:
+            new_body = await run.io_bound(_do)
+        except Exception as e:  # 模型挂了（配额/网络）不能裸 500，给可读错误
+            return JSONResponse({"error": f"模型调用失败：{e}"}, status_code=503)
         if not new_body:
             return JSONResponse({"error": "小博这次没想出来，稍后再试"}, status_code=500)
         ver_dir = _P(ud(uid)) / "skills" / slug / "versions"
