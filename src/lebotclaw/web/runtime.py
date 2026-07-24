@@ -126,9 +126,12 @@ class AppRuntime:
         return bool(self.model_adapters) and self.default_model is not None
 
     def model_label(self) -> str:
-        """展示用模型名：arkcoding 展开为具体子模型（如 deepseek-v4-pro）。"""
-        if self.default_model == "arkcoding" and "arkcoding" in self.model_adapters:
-            return self.model_adapters["arkcoding"].model
+        """展示用模型名：多模型网关类适配器展开为具体子模型（如 deepseek-v4-pro）。
+        只展示子模型 ID，不出现供应商/网关名字样。"""
+        adapter = self.model_adapters.get(self.default_model or "")
+        sub = getattr(adapter, "model", "") if adapter is not None else ""
+        if sub and self.default_model in ("arkcoding", "aigw"):
+            return sub
         return self.default_model or ""
 
     def switch_model(self, adapter_name: str, sub_model: str = ""):

@@ -11,6 +11,8 @@ _CONFIG_FILE = _CONFIG_DIR / "config.json"
 
 # 国内 AI 模型列表
 _MODEL_OPTIONS = [
+    {"name": "aigw", "adapter_class": "lebotclaw.adapters.aigw.AigwAdapter",
+     "env_key": "AIGW_API_KEY", "label": "智云 TokenHub（多模型）", "desc": "一个 key 挂 52 型号，AIGW_MODEL 切换，默认 deepseek-v4-pro"},
     {"name": "arkcoding", "adapter_class": "lebotclaw.adapters.arkcoding.ArkCodingAdapter",
      "env_key": "ARK_CODING_API_KEY", "label": "火山 Coding 套餐（多模型）", "desc": "一个 key 调 deepseek-v4-pro/glm-5.2/seed-2-1-pro/kimi-k2-7，ARK_CODING_MODEL 切换"},
     {"name": "deepseek", "adapter_class": "lebotclaw.adapters.deepseek.DeepSeekAdapter",
@@ -81,6 +83,10 @@ def _create_adapter(model_config, api_key=None):
             kwargs["endpoint_id"] = endpoint
     if model_config["name"] == "arkcoding":
         model = os.environ.get("ARK_CODING_MODEL", "")
+        if model:
+            kwargs["model"] = model
+    if model_config["name"] == "aigw":
+        model = os.environ.get("AIGW_MODEL", "")
         if model:
             kwargs["model"] = model
     return cls(**kwargs)
