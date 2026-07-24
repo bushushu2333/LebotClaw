@@ -176,10 +176,18 @@ _vision_adapter = None
 
 
 def _get_vision_adapter():
+    """拍照讲题视觉适配器：优先智云网关（kimi-k2.6 实测真视觉最准），
+    无 AIGW key 时回落火山 seed-2-1-pro。"""
     global _vision_adapter
     if _vision_adapter is None:
-        from lebotclaw.adapters.arkcoding import ArkCodingAdapter
-        _vision_adapter = ArkCodingAdapter(model="seed-2-1-pro")
+        import os as _os
+        if _os.getenv("AIGW_API_KEY"):
+            from lebotclaw.adapters.aigw import AigwAdapter
+            _vision_adapter = AigwAdapter(
+                model=_os.getenv("AIGW_VISION_MODEL", "kimi-k2.6"))
+        else:
+            from lebotclaw.adapters.arkcoding import ArkCodingAdapter
+            _vision_adapter = ArkCodingAdapter(model="seed-2-1-pro")
     return _vision_adapter
 
 
