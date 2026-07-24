@@ -1,8 +1,8 @@
-"""豆包 TTS「假小子 2.0」双向流式语音合成（小博的嗓音）。
+"""豆包 TTS「炀炀 2.0」双向流式语音合成（小博的嗓音）。
 
 走火山 openspeech bidirection WebSocket + 新版 X-Api-Key：
 - resource_id 固定 ``seed-tts-2.0``（ICL 复刻音色必须用这个）
-- speaker 固定 ``ICL_uranus_zh_female_jiaxiaozi_tob``（假小子 2.0，少年感嗓音）
+- speaker 固定 ``ICL_uranus_zh_male_yangyang_tob``（炀炀 2.0，少年男声）
 - API key 从环境变量 ``DOUBAO_TTS_API_KEY`` 读（服务器写在 ~/.lebotclaw/.env，
   由 AppRuntime._load_env 注入），**不入库、不进 git**
 
@@ -21,7 +21,7 @@ from lebotclaw.web import tts_protocols as proto
 _API_KEY = os.environ.get("DOUBAO_TTS_API_KEY", "")
 _RESOURCE_ID = "seed-tts-2.0"
 # 音色/音调可用环境变量覆盖（换音色不用改代码）：DOUBAO_TTS_SPEAKER / DOUBAO_TTS_PITCH
-_SPEAKER = os.environ.get("DOUBAO_TTS_SPEAKER", "ICL_uranus_zh_female_jiaxiaozi_tob")
+_SPEAKER = os.environ.get("DOUBAO_TTS_SPEAKER", "ICL_uranus_zh_male_yangyang_tob")
 _PITCH = int(os.environ.get("DOUBAO_TTS_PITCH", "0"))  # [-12,12]，负数压更低沉，仅 ICL/mix 音色有效
 _URL = "wss://openspeech.bytedance.com/api/v3/tts/bidirection"
 

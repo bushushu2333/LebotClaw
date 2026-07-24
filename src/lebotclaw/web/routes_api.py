@@ -279,7 +279,7 @@ def register_api_routes(runtime):
 
     @app.get("/api/tts")
     async def tts(text: str):
-        """小博开口说话：优先豆包假小子 2.0（配了 DOUBAO_TTS_API_KEY 时），失败回退 edge-tts。"""
+        """小博开口说话：优先豆包炀炀 2.0（配了 DOUBAO_TTS_API_KEY 时），失败回退 edge-tts。"""
         import asyncio
 
         from fastapi.responses import Response
